@@ -28,6 +28,9 @@ downloads/
 .env
 .env.local
 
+# Session persistence (contains auth cookies — never commit)
+.session/
+
 # OS
 .DS_Store
 Thumbs.db

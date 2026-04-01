@@ -24,17 +24,22 @@ from config import (
     MAX_WAIT_FOR_RESPONSE,
     SCREENSHOT_ON_EACH_STEP,
     REPORTS_DIR,
+    SESSION_PERSIST,
+    SESSION_DIR,
+    SESSION_MAX_AGE_HOURS,
 )
 from hvac_test_cases import TEST_CASES
 from validators import validate_response, validate_pdf
 from report_generator import ReportGenerator
+from session_manager import SessionManager
 
 
 class HVACTestingAgent:
     """Automated testing agent for the JCI Expert Advisor HVAC tool."""
 
-    def __init__(self, headless: bool = None, test_ids: list = None):
+    def __init__(self, headless: bool = None, test_ids: list = None, persist_session: bool = None):
         self.headless = headless if headless is not None else HEADLESS
+        self.persist_session = persist_session if persist_session is not None else SESSION_PERSIST
         self.browser = None
         self.context = None
         self.page = None
@@ -44,18 +49,50 @@ class HVACTestingAgent:
         self.screenshots_dir.mkdir(parents=True, exist_ok=True)
         self.test_ids = test_ids  # If None, run all tests
 
+        # Session manager for login persistence
+        self._session_mgr = SessionManager(
+            session_dir=SESSION_DIR,
+            max_age_hours=SESSION_MAX_AGE_HOURS,
+        ) if self.persist_session else None
+
     async def setup(self):
-        """Launch browser and navigate to Expert Advisor."""
+        """Launch browser and navigate to Expert Advisor.
+
+        If session persistence is enabled:
+        1. Tries to restore a saved session (cookies + localStorage).
+        2. Validates whether the restored session is still authenticated.
+        3. If invalid/missing, waits for manual login then saves the new session.
+        """
         print(f"[Agent] Launching browser (headless={self.headless})...")
         self.playwright = await async_playwright().start()
         self.browser = await self.playwright.chromium.launch(
             headless=self.headless,
             slow_mo=SLOW_MO,
         )
-        self.context = await self.browser.new_context(
-            accept_downloads=True,
-            viewport={"width": 1920, "height": 1080},
-        )
+
+        # If we have a saved session, try loading it into the context
+        session_loaded = False
+        if self._session_mgr and self._session_mgr.has_saved_session():
+            print("[Agent] Found saved session — attempting to restore...")
+            try:
+                storage_path = str(self._session_mgr.session_file)
+                self.context = await self.browser.new_context(
+                    accept_downloads=True,
+                    viewport={"width": 1920, "height": 1080},
+                    storage_state=storage_path,
+                )
+                session_loaded = True
+                print("[Agent] Session state loaded from disk.")
+            except Exception as exc:
+                print(f"[Agent] Failed to load saved session: {exc}")
+                self._session_mgr.clear()
+
+        if not session_loaded:
+            self.context = await self.browser.new_context(
+                accept_downloads=True,
+                viewport={"width": 1920, "height": 1080},
+            )
+
         self.context.set_default_timeout(DEFAULT_TIMEOUT)
         self.page = await self.context.new_page()
 
@@ -63,8 +100,31 @@ class HVACTestingAgent:
         await self.page.goto(TARGET_URL, wait_until="networkidle")
         await self._screenshot("01_initial_load")
 
-        # Wait for the page to be ready - check if we're logged in
-        await self._wait_for_app_ready()
+        # Validate authentication
+        if self._session_mgr:
+            is_authenticated = await self._session_mgr.validate_session(
+                self.page, TARGET_URL,
+            )
+
+            if is_authenticated:
+                print("[Agent] Session is valid — skipping login.")
+            else:
+                if session_loaded:
+                    print("[Agent] Saved session expired — login required.")
+                    self._session_mgr.clear()
+
+                # Wait for user to log in manually
+                login_ok = await self._session_mgr.wait_for_manual_login(
+                    self.page, TARGET_URL,
+                )
+                if login_ok:
+                    await self._session_mgr.save_from_context(self.context)
+                    print("[Agent] New session saved for future runs.")
+                else:
+                    print("[Agent] Warning: Login not detected — proceeding anyway.")
+        else:
+            # No session persistence — original behavior
+            await self._wait_for_app_ready()
 
     async def _wait_for_app_ready(self):
         """Wait for the Expert Advisor app to be fully loaded and ready."""
@@ -553,7 +613,15 @@ class HVACTestingAgent:
         return report_path
 
     async def teardown(self):
-        """Clean up browser resources."""
+        """Clean up browser resources. Saves session state if persistence is enabled."""
+        # Save session before closing so the next run can reuse it
+        if self._session_mgr and self.context:
+            try:
+                await self._session_mgr.save_from_context(self.context)
+                print("[Agent] Session saved for next run.")
+            except Exception as exc:
+                print(f"[Agent] Warning: could not save session: {exc}")
+
         if self.browser:
             await self.browser.close()
         if self.playwright:

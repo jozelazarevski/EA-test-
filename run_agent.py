@@ -80,12 +80,27 @@ Examples:
         action="store_true",
         help="List all available test cases and exit",
     )
+    parser.add_argument(
+        "--no-session",
+        action="store_true",
+        help="Disable session persistence (always re-login)",
+    )
+    parser.add_argument(
+        "--clear-session",
+        action="store_true",
+        help="Clear saved session and re-login",
+    )
 
     args = parser.parse_args()
 
     if args.list:
         list_test_cases()
         sys.exit(0)
+
+    if args.clear_session:
+        from session_manager import SessionManager
+        SessionManager().clear()
+        print("Saved session cleared.")
 
     # Determine which tests to run
     test_ids = None
@@ -120,7 +135,8 @@ Examples:
     print(f"  Mode: {'headless' if args.headless else 'visible browser'}")
     print("=" * 60 + "\n")
 
-    agent = HVACTestingAgent(headless=args.headless, test_ids=test_ids)
+    persist = not args.no_session
+    agent = HVACTestingAgent(headless=args.headless, test_ids=test_ids, persist_session=persist)
 
     report_path = asyncio.run(agent.run())
 
