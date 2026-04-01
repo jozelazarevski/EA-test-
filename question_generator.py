@@ -6,24 +6,27 @@ including initial questions, follow-ups, and multi-turn conversation flows.
 """
 
 import json
-import os
 from typing import Optional
 
 import anthropic
 
+from config import ANTHROPIC_API_KEY, LLM_MODEL
+
 
 def get_client() -> anthropic.Anthropic:
-    api_key = os.getenv("ANTHROPIC_API_KEY")
-    if not api_key:
-        raise EnvironmentError("ANTHROPIC_API_KEY environment variable is required.")
-    return anthropic.Anthropic(api_key=api_key)
+    if not ANTHROPIC_API_KEY:
+        raise EnvironmentError(
+            "ANTHROPIC_API_KEY is required. "
+            "Set it in .env or export ANTHROPIC_API_KEY='your-key-here'"
+        )
+    return anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
 
 
 def generate_questions(
     persona: dict,
     num_questions: int = 3,
     focus_domain: Optional[str] = None,
-    model: str = "claude-sonnet-4-6",
+    model: str = None,
 ) -> list:
     """
     Generate realistic questions that this persona would ask Expert Advisor.
@@ -37,6 +40,7 @@ def generate_questions(
     Returns:
         List of dicts: [{"question": "...", "intent": "...", "expected_depth": "..."}]
     """
+    model = model or LLM_MODEL
     client = get_client()
 
     domain_focus = ""
@@ -98,13 +102,14 @@ def generate_follow_up(
     original_question: str,
     ea_response: str,
     conversation_history: Optional[list] = None,
-    model: str = "claude-sonnet-4-6",
+    model: str = None,
 ) -> dict:
     """
     Generate a realistic follow-up question based on the EA response.
 
     This simulates how the persona would react to and follow up on the answer.
     """
+    model = model or LLM_MODEL
     client = get_client()
 
     history_text = ""
@@ -172,12 +177,13 @@ Return JSON (no markdown):
 def generate_adversarial_inputs(
     persona: dict,
     num_inputs: int = 3,
-    model: str = "claude-sonnet-4-6",
+    model: str = None,
 ) -> list:
     """
     Generate adversarial test inputs for edge-case personas.
     Tests system robustness, boundary handling, and safety guardrails.
     """
+    model = model or LLM_MODEL
     if persona["expertise_level"] != "none" and "ADV" not in persona["id"]:
         return []
 

@@ -35,7 +35,7 @@ from datetime import datetime
 from pathlib import Path
 
 from agent import HVACTestingAgent
-from config import REPORTS_DIR, HEADLESS
+from config import REPORTS_DIR, HEADLESS, LLM_MODEL
 from personas import PERSONAS, get_persona, get_personas_by_tier, list_all_personas
 from question_generator import generate_questions, generate_follow_up, generate_adversarial_inputs
 from llm_evaluator import evaluate_response, evaluate_conversation_coherence
@@ -51,13 +51,13 @@ class PersonaTestRunner:
         questions_per_persona: int = 3,
         follow_ups_per_question: int = 1,
         headless: bool = False,
-        model: str = "claude-sonnet-4-6",
+        model: str = None,
     ):
         self.personas = personas
         self.questions_per_persona = questions_per_persona
         self.follow_ups_per_question = follow_ups_per_question
         self.headless = headless
-        self.model = model
+        self.model = model or LLM_MODEL
         self.run_id = datetime.now().strftime("%Y%m%d_%H%M%S")
         self.all_results = []
 
@@ -320,7 +320,7 @@ def main():
     )
     parser.add_argument("--questions", type=int, default=3, help="Questions per persona (default: 3)")
     parser.add_argument("--follow-ups", type=int, default=1, help="Follow-ups per question (default: 1)")
-    parser.add_argument("--model", default="claude-sonnet-4-6", help="Claude model for generation/evaluation")
+    parser.add_argument("--model", default=None, help=f"Claude model (default: from .env or {LLM_MODEL})")
     parser.add_argument("--list", action="store_true", help="List all personas and exit")
 
     args = parser.parse_args()

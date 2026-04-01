@@ -7,21 +7,21 @@ and detailed feedback.
 """
 
 import json
-import os
 from typing import Optional
 
 import anthropic
 
+from config import ANTHROPIC_API_KEY, LLM_MODEL
+
 
 def get_client() -> anthropic.Anthropic:
     """Get an Anthropic client, raising a clear error if no API key."""
-    api_key = os.getenv("ANTHROPIC_API_KEY")
-    if not api_key:
+    if not ANTHROPIC_API_KEY:
         raise EnvironmentError(
-            "ANTHROPIC_API_KEY environment variable is required. "
-            "Set it with: export ANTHROPIC_API_KEY='your-key-here'"
+            "ANTHROPIC_API_KEY is required. "
+            "Set it in .env or export ANTHROPIC_API_KEY='your-key-here'"
         )
-    return anthropic.Anthropic(api_key=api_key)
+    return anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
 
 
 def evaluate_response(
@@ -29,7 +29,7 @@ def evaluate_response(
     question: str,
     response_text: str,
     conversation_history: Optional[list] = None,
-    model: str = "claude-sonnet-4-6",
+    model: str = None,
 ) -> dict:
     """
     Use an LLM to evaluate an Expert Advisor response from a persona's perspective.
@@ -52,6 +52,7 @@ def evaluate_response(
         "summary": "..."
     }
     """
+    model = model or LLM_MODEL
     client = get_client()
 
     # Build conversation context
@@ -175,7 +176,7 @@ Be rigorous but fair. A score of 7-8 is good, 9-10 is exceptional. Deduct points
 def evaluate_conversation_coherence(
     persona: dict,
     conversation_history: list,
-    model: str = "claude-sonnet-4-6",
+    model: str = None,
 ) -> dict:
     """
     Evaluate the overall coherence and quality of a multi-turn conversation.
@@ -183,6 +184,7 @@ def evaluate_conversation_coherence(
     This checks whether the Expert Advisor maintained context, avoided
     contradictions, and provided a coherent experience across multiple turns.
     """
+    model = model or LLM_MODEL
     client = get_client()
 
     turns_text = ""
