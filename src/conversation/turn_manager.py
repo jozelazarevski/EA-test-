@@ -53,7 +53,13 @@ EASendFn = Callable[[str], Awaitable[dict[str, Any]]]
 
 
 class TurnManager:
-    """Orchestrates individual turns between the persona simulator and the EA chatbot."""
+    """Orchestrates individual turns between the persona simulator and the EA chatbot.
+
+    Termination detection uses a two-stage approach:
+    1. Fast phrase-matching for obvious signals (zero cost).
+    2. Optional LLM-based classifier when phrase matching is inconclusive
+       and the conversation is past a minimum turn threshold.
+    """
 
     def __init__(
         self,
@@ -62,11 +68,15 @@ class TurnManager:
         turn_timeout: float = 30.0,
         max_retries: int = 3,
         model: str | None = None,
+        llm_termination: bool = True,
+        llm_termination_after_turn: int = 4,
     ) -> None:
         self.max_turns = max_turns
         self.turn_timeout = turn_timeout
         self.max_retries = max_retries
         self.model = model or LLM_MODEL
+        self.llm_termination = llm_termination
+        self.llm_termination_after_turn = llm_termination_after_turn
         self._client: anthropic.Anthropic | None = None
 
     # ------------------------------------------------------------------
@@ -167,10 +177,24 @@ class TurnManager:
             claude_messages.append({"role": "user", "content": follow_up_user_prompt})
             claude_messages.append({"role": "assistant", "content": tech_message})
 
-            # 2d. Check for natural termination
+            # 2d. Check for natural termination (phrase match first, LLM fallback)
             termination = self._detect_termination(tech_message)
             if termination is not None:
                 return turns, termination
+
+            # LLM-based termination check for ambiguous cases
+            if (
+                self.llm_termination
+                and turn_number >= self.llm_termination_after_turn
+                and turn_number % 2 == 0  # check every other turn to limit cost
+            ):
+                llm_termination = await self._llm_detect_termination(turns)
+                if llm_termination is not None:
+                    logger.info(
+                        "LLM termination detector triggered: %s at turn %d",
+                        llm_termination.value, turn_number,
+                    )
+                    return turns, llm_termination
 
         return turns, TerminationReason.MAX_TURNS
 
@@ -275,6 +299,46 @@ class TurnManager:
             return {}, f"EA chatbot did not respond within {self.turn_timeout * 4}s"
         except Exception as exc:
             return {}, f"EA send error: {exc}"
+
+    async def _llm_detect_termination(self, turns: list[Turn]) -> TerminationReason | None:
+        """
+        Use a lightweight LLM call to classify whether the conversation
+        should terminate. Only called when phrase matching is inconclusive.
+        """
+        # Build a compact transcript of the last few turns
+        recent = turns[-6:] if len(turns) > 6 else turns
+        transcript = "\n".join(
+            f"[{t.speaker.upper()}]: {t.message[:200]}" for t in recent if t.message
+        )
+
+        prompt = (
+            "Analyse this HVAC support conversation excerpt and determine if "
+            "it should end. Respond with EXACTLY one word:\n"
+            "  CONTINUE — conversation is still productive\n"
+            "  RESOLVED — the technician's issue appears resolved\n"
+            "  ESCALATED — the technician is escalating to someone else\n"
+            "  GAVE_UP — the technician has given up on this chat\n\n"
+            f"Transcript:\n{transcript}\n\nVerdict:"
+        )
+
+        try:
+            result = await asyncio.wait_for(
+                self._call_claude(
+                    "You are a conversation analyst. Reply with a single word.",
+                    [{"role": "user", "content": prompt}],
+                ),
+                timeout=10.0,
+            )
+            verdict = result.strip().upper().replace(" ", "_")
+            mapping = {
+                "RESOLVED": TerminationReason.RESOLVED,
+                "ESCALATED": TerminationReason.ESCALATED,
+                "GAVE_UP": TerminationReason.GAVE_UP,
+            }
+            return mapping.get(verdict)
+        except Exception as exc:
+            logger.debug("LLM termination check failed (non-critical): %s", exc)
+            return None
 
     @staticmethod
     def _detect_termination(tech_message: str) -> TerminationReason | None:

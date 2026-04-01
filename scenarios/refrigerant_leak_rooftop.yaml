@@ -1,0 +1,31 @@
+id: SCEN-RTU-001
+title: Rooftop Unit — Inadequate Cooling with Low Refrigerant Charge
+category: Rooftop Units
+difficulty: easy
+equipment: YORK 20-ton rooftop unit (R-410A) with scroll compressors
+
+symptoms:
+  - "Space temperature not reaching setpoint — stuck at 78°F with 72°F setpoint"
+  - "Suction pressure reads 95 psig (normal is ~118 psig for R-410A)"
+  - "Superheat is reading 22°F (should be around 10-12°F)"
+  - "Liquid line sight glass shows bubbles"
+  - "Compressor is running but discharge temperature seems higher than usual"
+  - "No obvious oil stains visible on unit exterior"
+
+context: >
+  August in Phoenix, AZ. Outdoor temperature is 112°F. The unit serves a
+  retail store that opens at 9 AM. Store manager says the unit has been
+  gradually losing cooling capacity over the past month. Last service was
+  6 months ago and everything checked out.
+
+root_cause: >
+  Slow refrigerant leak at a Schrader valve core on the liquid service port.
+  The valve core has a hairline crack from over-tightening during last service.
+  Leak rate is approximately 1 oz per week.
+
+tags:
+  - rooftop
+  - refrigerant-leak
+  - r410a
+  - low-charge
+  - cooling

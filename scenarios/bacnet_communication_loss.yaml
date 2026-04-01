@@ -1,0 +1,33 @@
+id: SCEN-CTRL-001
+title: BACnet MSTP Communication Loss — Multiple Controllers Offline
+category: Building Automation Controls
+difficulty: hard
+equipment: Johnson Controls Metasys system with NAE55 supervisor and FEC controllers on BACnet MSTP trunk
+
+symptoms:
+  - "NAE55 shows 6 out of 14 FEC controllers as offline on MSTP trunk 2"
+  - "The offline controllers are physically scattered — not all at the end of the trunk"
+  - "Remaining 8 controllers are communicating normally"
+  - "Restarting the NAE temporarily restores communication for 10-20 minutes, then controllers drop again"
+  - "MS/TP diagnostic shows high token pass failure count and CRC errors"
+  - "No wiring changes have been made recently"
+
+context: >
+  The system has been running fine for 3 years. The issue started two weeks
+  ago after a lightning storm. The building is a 6-story hospital wing.
+  Affected controllers manage VAV boxes on floors 3-5. Patient comfort
+  complaints are increasing.
+
+root_cause: >
+  A lightning-induced surge damaged the RS-485 transceiver chip on one FEC
+  controller (address 7), causing it to intermittently jam the MSTP bus with
+  noise. When it transmits garbage, downstream and some upstream controllers
+  lose communication. The damaged controller itself sometimes appears online
+  because its processor is fine — only the comm chip is marginal.
+
+tags:
+  - bacnet
+  - mstp
+  - metasys
+  - communication
+  - lightning

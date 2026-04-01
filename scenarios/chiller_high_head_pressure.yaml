@@ -1,0 +1,29 @@
+id: SCEN-CHILLER-001
+title: York YK Chiller — High Head Pressure Alarm
+category: Chiller Systems
+difficulty: medium
+equipment: YORK YK 500-ton centrifugal chiller (R-134a)
+
+symptoms:
+  - "High head pressure alarm triggered — condenser pressure reading 125 psig (normally ~95 psig)"
+  - "Condenser water leaving temperature is 98°F (setpoint is 85°F)"
+  - "Compressor current draw is near the amp limit"
+  - "Chiller is approaching capacity limit and may shut down on safety"
+  - "Cooling tower fans appear to be running"
+
+context: >
+  Mid-July, ambient temperature is 102°F. The building is a 200,000 sq ft
+  office complex. Occupants are complaining about rising indoor temperatures.
+  The chiller has been running continuously for 3 days during a heat wave.
+  Last maintenance was 4 months ago.
+
+root_cause: >
+  Condenser tubes are fouled with mineral scale, reducing heat transfer.
+  The cooling tower basin also has excessive algae growth, and the water
+  treatment chemical feeder ran dry two weeks ago.
+
+tags:
+  - chiller
+  - condenser
+  - high-pressure
+  - water-treatment

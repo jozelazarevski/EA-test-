@@ -1,0 +1,30 @@
+id: SCEN-AHU-001
+title: Air Handling Unit — Freezestat Trip on Startup
+category: Air Handling Units
+difficulty: medium
+equipment: Johnson Controls AHU with hot-water coil and Metasys DDC controls
+
+symptoms:
+  - "AHU tripped on freezestat alarm during early morning startup"
+  - "Outdoor air temperature is 18°F"
+  - "Mixed air temperature reading shows 28°F"
+  - "Hot water valve appears to be commanded open but coil feels cold to touch"
+  - "Building occupants reporting no airflow from diffusers"
+
+context: >
+  January morning in Chicago. The building is a 4-story medical office.
+  AHU serves floors 2-3. Night setback mode ended at 5:30 AM and the unit
+  attempted to start. The freezestat tripped within 2 minutes of startup.
+  This is the third time this week.
+
+root_cause: >
+  The hot water circulating pump for this AHU branch has a failed capacitor
+  and is not actually running, even though the BAS shows it commanded on.
+  No hot water is flowing through the coil despite the valve being open.
+
+tags:
+  - ahu
+  - freezestat
+  - hot-water
+  - controls
+  - winter
