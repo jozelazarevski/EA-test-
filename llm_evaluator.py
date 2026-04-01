@@ -294,6 +294,144 @@ Be rigorous but fair. When reference data is provided, use it as the primary sou
         }
 
 
+def evaluate_chain_coherence(
+    chain: dict,
+    turns: list,
+    per_turn_evaluations: list,
+    model: str = None,
+) -> dict:
+    """
+    Evaluate coherence of a conversation chain — consecutive questions about
+    the same equipment/topic.
+
+    Specifically checks:
+    - Whether the EA stays on the correct equipment model throughout
+    - Whether refrigerant types, operating parameters, and references remain
+      consistent across turns
+    - Whether later answers build on (not contradict) earlier ones
+    - Whether the EA correctly tracks the evolving problem context
+
+    Args:
+        chain: The chain definition from CONVERSATION_CHAINS (has topic,
+               description, questions).
+        turns: List of {"question": str, "response": str} dicts in order.
+        per_turn_evaluations: The individual evaluate_response() results.
+        model: Override Claude model.
+
+    Returns:
+        Dict with coherence scores, reference consistency analysis,
+        and detailed reasoning.
+    """
+    model = model or LLM_MODEL
+    client = get_client()
+
+    turns_text = ""
+    for i, turn in enumerate(turns, 1):
+        turns_text += (
+            f"Turn {i}:\n"
+            f"  User: {turn['question']}\n"
+            f"  EA: {turn['response'][:800]}\n\n"
+        )
+
+    prompt = f"""You are a quality assurance evaluator for Johnson Controls' "Expert Advisor" AI assistant.
+
+You are evaluating a CONVERSATION CHAIN — a sequence of consecutive questions about the SAME equipment/topic. Your primary job is to check whether the assistant maintained context and stayed consistent.
+
+<chain_definition>
+Topic: {chain['topic']}
+Description: {chain['description']}
+</chain_definition>
+
+<conversation>
+{turns_text}
+</conversation>
+
+## Instructions
+
+Evaluate this conversation chain on these specific dimensions. For each, explain WHY with specific evidence (quote or cite turn numbers).
+
+Return JSON (no markdown):
+{{
+    "equipment_consistency": {{
+        "score": <1-10>,
+        "correct_model": "<what equipment model was asked about>",
+        "models_referenced": ["<list every equipment model/type mentioned in ALL responses>"],
+        "drifted": <true if EA switched to a different equipment type>,
+        "reasoning": "<cite specific turns where model was correct or drifted>"
+    }},
+    "refrigerant_consistency": {{
+        "score": <1-10>,
+        "expected_refrigerant": "<correct refrigerant for this equipment>",
+        "refrigerants_mentioned": ["<all refrigerants mentioned across turns>"],
+        "contradictions": ["<any conflicting refrigerant claims>"],
+        "reasoning": "<cite turns>"
+    }},
+    "parameter_consistency": {{
+        "score": <1-10>,
+        "values_tracked": [
+            {{"parameter": "<e.g. head pressure>", "turn_introduced": <N>, "consistent": <true|false>, "detail": "<what happened>"}}
+        ],
+        "reasoning": "<did operating values, setpoints, or specs stay consistent?>"
+    }},
+    "context_retention": {{
+        "score": <1-10>,
+        "retained_items": ["<info from earlier turns correctly used later>"],
+        "lost_items": ["<info from earlier turns ignored or forgotten>"],
+        "reasoning": "<cite specific turns>"
+    }},
+    "progressive_depth": {{
+        "score": <1-10>,
+        "builds_on_previous": <true|false>,
+        "repeated_info": ["<info unnecessarily repeated across turns>"],
+        "reasoning": "<did answers get more specific as context accumulated?>"
+    }},
+    "overall_chain_score": <1-10>,
+    "quality_tier": "<exemplary|proficient|developing|unsatisfactory|critical_failure>",
+    "issues": ["<specific coherence issue found>"],
+    "summary": "<2-3 sentence verdict focusing on whether EA stayed on the same equipment and maintained flow>"
+}}
+
+Be strict about equipment and refrigerant consistency — if the user asks about a YORK YK and the EA starts giving advice for a YORK YVAA, that is a significant failure. If the EA correctly tracks the problem across turns, reward that highly.
+"""
+
+    try:
+        message = client.messages.create(
+            model=model,
+            max_tokens=1500,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        raw = message.content[0].text.strip()
+        if raw.startswith("```"):
+            raw = raw.split("\n", 1)[1]
+            if raw.endswith("```"):
+                raw = raw[: raw.rfind("```")]
+        result = json.loads(raw)
+
+        # Ensure quality_tier
+        if "quality_tier" not in result:
+            score = result.get("overall_chain_score", 0)
+            if score >= 9:
+                result["quality_tier"] = "exemplary"
+            elif score >= 7:
+                result["quality_tier"] = "proficient"
+            elif score >= 5:
+                result["quality_tier"] = "developing"
+            elif score >= 3:
+                result["quality_tier"] = "unsatisfactory"
+            else:
+                result["quality_tier"] = "critical_failure"
+
+        return result
+
+    except Exception as e:
+        return {
+            "overall_chain_score": 0,
+            "quality_tier": "critical_failure",
+            "issues": [str(e)],
+            "summary": f"Chain coherence evaluation failed: {e}",
+        }
+
+
 def evaluate_conversation_coherence(
     persona: dict,
     conversation_history: list,

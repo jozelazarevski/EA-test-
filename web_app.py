@@ -40,7 +40,7 @@ from config import (
     SESSION_PERSIST,
     TARGET_URL,
 )
-from hvac_test_cases import TEST_CASES
+from hvac_test_cases import TEST_CASES, CONVERSATION_CHAINS
 from personas import PERSONAS
 
 logger = logging.getLogger(__name__)
@@ -155,11 +155,15 @@ def run_detail(run_id):
 
 @app.route("/api/run/static", methods=["POST"])
 def api_run_static():
-    """Start a static test run."""
+    """Start a static test run (LLM-evaluated)."""
+    if not ANTHROPIC_API_KEY:
+        return jsonify({"error": "ANTHROPIC_API_KEY not configured. Set it in Settings."}), 400
+
     data = request.json or {}
     test_ids = data.get("test_ids", [])
     category = data.get("category")
     headless = data.get("headless", True)
+    model = data.get("model") or LLM_MODEL
 
     # Resolve test IDs
     if category:
@@ -177,6 +181,7 @@ def api_run_static():
         "started_at": datetime.now().isoformat(),
         "test_ids": test_ids,
         "headless": headless,
+        "model": model,
         "events": event_queue,
         "progress": 0,
         "total": len(test_ids),
@@ -188,7 +193,7 @@ def api_run_static():
 
     thread = threading.Thread(
         target=_run_static_tests,
-        args=(run_id, test_ids, headless),
+        args=(run_id, test_ids, headless, model),
         daemon=True,
     )
     thread.start()
@@ -538,8 +543,8 @@ def _emit(run_id: str, event: dict):
         run["events"].put(event)
 
 
-def _run_static_tests(run_id: str, test_ids: list, headless: bool):
-    """Run static tests in a background thread."""
+def _run_static_tests(run_id: str, test_ids: list, headless: bool, model: str = None):
+    """Run static tests with LLM evaluation in a background thread."""
     from agent import HVACTestingAgent
 
     run = _get_run(run_id)
@@ -550,7 +555,10 @@ def _run_static_tests(run_id: str, test_ids: list, headless: bool):
     asyncio.set_event_loop(loop)
 
     try:
-        agent = HVACTestingAgent(headless=headless, test_ids=test_ids, persist_session=SESSION_PERSIST)
+        agent = HVACTestingAgent(
+            headless=headless, test_ids=test_ids,
+            persist_session=SESSION_PERSIST, model=model,
+        )
         loop.run_until_complete(agent.setup())
         _emit(run_id, {"type": "status", "status": "running", "message": "Browser ready. Running tests..."})
 
@@ -568,7 +576,9 @@ def _run_static_tests(run_id: str, test_ids: list, headless: bool):
             })
 
             result = loop.run_until_complete(agent.run_test_case(tc))
-            passed = result.get("validation_results", {}).get("overall_pass", False)
+            evaluation = result.get("evaluation", {})
+            score = evaluation.get("overall_score", 0)
+            tier = evaluation.get("quality_tier", "unknown")
 
             run["progress"] = i + 1
             run["results"].append(result)
@@ -576,27 +586,48 @@ def _run_static_tests(run_id: str, test_ids: list, headless: bool):
             _emit(run_id, {
                 "type": "test_result",
                 "test_id": test_id,
-                "passed": passed,
-                "score": "PASS" if passed else "FAIL",
+                "passed": score >= 6,
+                "score": score,
+                "tier": tier,
                 "response_time": result.get("response_time", 0),
                 "progress": i + 1,
                 "total": len(test_ids),
+            })
+
+        # Run conversation chains
+        _emit(run_id, {"type": "status", "status": "running", "message": "Running conversation chains..."})
+        loop.run_until_complete(agent.run_all_chains())
+
+        for cr in agent.chain_results:
+            coherence = cr.get("coherence", {})
+            _emit(run_id, {
+                "type": "chain_result",
+                "chain_id": cr["chain_id"],
+                "topic": cr["topic"],
+                "chain_score": coherence.get("overall_chain_score", 0),
+                "tier": coherence.get("quality_tier", "unknown"),
+                "avg_turn_score": cr["avg_turn_score"],
             })
 
         # Generate report
         _emit(run_id, {"type": "status", "status": "generating_report", "message": "Generating report..."})
         from report_generator import ReportGenerator
         gen = ReportGenerator(run_id)
-        report_path = gen.generate(agent.results)
+        report_path = gen.generate(agent.results, agent.chain_results)
 
         run["status"] = "complete"
         run["report_path"] = str(report_path.name)
+
+        scores = [r.get("evaluation", {}).get("overall_score", 0) for r in agent.results]
+        avg_score = sum(scores) / len(scores) if scores else 0
 
         _emit(run_id, {
             "type": "complete",
             "report_path": str(report_path.name),
             "total_tests": len(test_ids),
-            "passed": sum(1 for r in agent.results if r.get("validation_results", {}).get("overall_pass")),
+            "total_chains": len(agent.chain_results),
+            "avg_score": round(avg_score, 1),
+            "passed": sum(1 for s in scores if s >= 6),
         })
 
         loop.run_until_complete(agent.teardown())

@@ -1,33 +1,38 @@
 # HVAC Expert Advisor Testing Agent
 
-Automated testing agent for [Johnson Controls Expert Advisor](https://expertadvisor.jci.com/). The agent navigates to Expert Advisor, submits HVAC questions across multiple categories, validates responses and PDF documents, and generates detailed test reports.
+Automated testing agent for [Johnson Controls Expert Advisor](https://expertadvisor.jci.com/). The agent navigates to Expert Advisor, submits HVAC questions, captures responses, evaluates them using LLM-powered quality assessment, and generates detailed test reports.
 
-## Two Testing Modes
+## Testing Modes
 
-### 1. Static Test Cases (`run_agent.py`)
-Predefined questions with keyword-based validation. Fast, deterministic, no API key needed.
+### 1. Test Cases (`run_agent.py`)
+Predefined HVAC questions evaluated by Claude across 6 weighted dimensions (safety, accuracy, completeness, relevance, clarity, persona fit). Each response is classified into a five-tier quality model from Exemplary to Critical Failure.
 
-### 2. LLM-Powered Persona Tests (`run_persona_tests.py`)
-AI-driven testing with 10 realistic personas that generate contextual questions, conduct multi-turn conversations, and use Claude to intelligently evaluate response quality. Requires an Anthropic API key.
+### 2. Persona Tests (`run_persona_tests.py`)
+AI-driven testing with 10 realistic personas that generate contextual questions, conduct multi-turn conversations, and use Claude to intelligently evaluate response quality. Includes follow-up generation, conversation coherence analysis, and adversarial testing.
+
+Both modes use the same LLM evaluation engine and require an Anthropic API key.
 
 ## Features
 
 - **Browser automation** via Playwright — interacts with Expert Advisor like a real user
-- **19 static test cases** across 8 HVAC categories
+- **19 test cases** across 8 HVAC categories with LLM evaluation
 - **10 LLM-powered personas** across 4 tiers (technicians, engineers, management, adversarial)
+- **6-dimension scoring** — safety (2x), accuracy (1.5x), completeness (1.2x), relevance (1x), clarity (0.8x), persona fit (0.8x)
+- **5-tier quality model** — Exemplary, Proficient, Developing, Unsatisfactory, Critical Failure
+- **Critical dimension caps** — safety < 4 caps tier at Unsatisfactory; accuracy < 4 caps at Developing
+- **Reference-based fact checking** — responses verified against ASHRAE, EPA, NFPA standards and equipment specs
 - **AI question generation** — personas generate contextually realistic questions matching their expertise
 - **Multi-turn conversations** — follow-up questions adapt based on previous responses
-- **AI response evaluation** — Claude scores responses on 6 dimensions (accuracy, completeness, relevance, clarity, safety, persona-fit)
 - **Conversation coherence analysis** — evaluates context retention across multi-turn exchanges
 - **Adversarial testing** — off-topic handling, prompt injection resistance, competitor info boundaries
 - **PDF validation** — downloads and inspects referenced PDFs for expected content
-- **Rich HTML reports** with persona scorecards, dimension breakdowns, and conversation details
+- **Rich HTML reports** with dimension breakdowns, reasoning chains, and tier badges
 
 ## Prerequisites
 
 - Python 3.9+
+- `ANTHROPIC_API_KEY` environment variable (required for all tests)
 - You must be logged into Expert Advisor (OTP authentication) before running
-- For persona tests: `ANTHROPIC_API_KEY` environment variable
 
 ## Setup
 
@@ -38,13 +43,13 @@ pip install -r requirements.txt
 # Install Playwright browsers
 playwright install chromium
 
-# For persona tests — set your API key
+# Set your API key
 export ANTHROPIC_API_KEY='your-key-here'
 ```
 
 ## Usage
 
-### Static Tests
+### Test Cases
 
 ```bash
 # Run all 19 tests (browser visible)
@@ -58,6 +63,9 @@ python run_agent.py --tests CHILLER-001 AHU-001 CTRL-001
 
 # Run an entire category
 python run_agent.py --category "Chiller Systems"
+
+# Custom evaluation model
+python run_agent.py --model claude-sonnet-4-6
 
 # List all test cases
 python run_agent.py --list
@@ -85,6 +93,34 @@ python run_persona_tests.py --headless --model claude-sonnet-4-6
 # List all personas
 python run_persona_tests.py --list
 ```
+
+## Evaluation
+
+Every response (from both test modes) is evaluated by Claude across **6 weighted dimensions**:
+
+| Dimension | Weight | What it measures |
+|-----------|--------|-----------------|
+| **Safety** | 2.0x (critical) | Proper safety warnings, no dangerous advice |
+| **Accuracy** | 1.5x (high) | Technical correctness verified against references |
+| **Completeness** | 1.2x (medium) | Whether the question was fully addressed |
+| **Relevance** | 1.0x (standard) | Response stays on-topic and answers what was asked |
+| **Clarity** | 0.8x (lower) | Writing quality appropriate for the user's level |
+| **Persona Fit** | 0.8x (lower) | Response matches the user's expertise and needs |
+
+### Quality Tiers
+
+| Tier | Score | Meaning |
+|------|-------|---------|
+| **Exemplary** | 9-10 | Exceeds expectations |
+| **Proficient** | 7-8.99 | Meets expectations |
+| **Developing** | 5-6.99 | Partially meets expectations |
+| **Unsatisfactory** | 3-4.99 | Below expectations |
+| **Critical Failure** | 1-2.99 | Dangerous or fundamentally wrong |
+
+### Critical Dimension Caps
+
+- If **Safety < 4** → overall tier capped at Unsatisfactory
+- If **Accuracy < 4** → overall tier capped at Developing
 
 ## Personas
 
@@ -114,20 +150,7 @@ python run_persona_tests.py --list
 | `ADV-COMPETITOR` | Tom — Competitor Analyst | Proprietary info extraction, competitive comparisons |
 | `ADV-OVERLOAD` | StressBot — Stress Tester | Malformed inputs, XSS, system robustness |
 
-## Evaluation Dimensions
-
-Each response is scored 1-10 on:
-
-| Dimension | What it measures |
-|-----------|-----------------|
-| **Accuracy** | Technical correctness of the response |
-| **Completeness** | Whether the question was fully addressed |
-| **Relevance** | Response stays on-topic and answers what was asked |
-| **Clarity** | Writing quality appropriate for the persona's level |
-| **Safety** | Proper safety warnings, no dangerous advice |
-| **Persona Fit** | Response matches the user's expertise level and needs |
-
-## Static Test Categories
+## Test Categories
 
 | Category              | Tests | Description                                      |
 |-----------------------|-------|--------------------------------------------------|
@@ -138,21 +161,31 @@ Each response is scored 1-10 on:
 | Energy Efficiency     | 2     | Chiller plant optimization and VSD technology     |
 | Fire & Safety         | 1     | HVAC fire safety requirements                     |
 | Product Documentation | 2     | Installation guides and tech specs (PDF expected) |
+| Troubleshooting       | 2     | Discharge temperature alarms, short cycling       |
 | Edge Cases            | 3     | Off-topic questions, competitor comparisons, empty input |
 
 ## Reports
 
 Reports are saved to the `reports/` directory:
 
-- **Static tests:** `report_<run_id>.html` / `.json`
+- **Test cases:** `report_<run_id>.html` / `.json`
 - **Persona tests:** `persona_report_<run_id>.html` / `.json`
 - **Screenshots:** `screenshots_<run_id>/`
+
+Both report types include:
+- Overall scores and tier distribution
+- Per-test dimension breakdowns with weighted scores
+- Reasoning chains explaining each verdict
+- Strengths, weaknesses, and improvement suggestions
+- Reference comparisons (facts confirmed/missing/incorrect)
+- Red flags highlighting safety or quality concerns
 
 ## Configuration
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `ANTHROPIC_API_KEY` | — | Required for persona tests |
+| `ANTHROPIC_API_KEY` | — | Required for all tests |
+| `LLM_MODEL` | `claude-sonnet-4-6` | Claude model for evaluation |
 | `HEADLESS` | false | Run browser without visible window |
 | `SLOW_MO` | 500 | Milliseconds between browser actions |
 | `TIMEOUT` | 60000 | Default timeout for page operations (ms) |
@@ -160,18 +193,23 @@ Reports are saved to the `reports/` directory:
 ## Project Structure
 
 ```
-├── run_agent.py               # Static test CLI entry point
+├── run_agent.py               # Test case CLI entry point
 ├── run_persona_tests.py       # Persona test CLI entry point
-├── agent.py                   # Browser automation & orchestration
+├── agent.py                   # Browser automation & LLM evaluation
 ├── personas.py                # 10 persona definitions with profiles
 ├── question_generator.py      # LLM-powered question generation
 ├── llm_evaluator.py           # LLM-powered response evaluation
-├── hvac_test_cases.py         # Static test case definitions
-├── validators.py              # Keyword & PDF validation
-├── report_generator.py        # Static test HTML/JSON reports
+├── hvac_test_cases.py         # Test case definitions
+├── validators.py              # PDF validation
+├── report_generator.py        # Test case HTML/JSON reports
 ├── report_generator_persona.py # Persona test HTML/JSON reports
+├── reference_checker.py       # Authoritative knowledge base access
 ├── config.py                  # Configuration settings
+├── web_app.py                 # Flask web UI
 ├── requirements.txt           # Python dependencies
+├── references/                # Knowledge base (YAML)
+├── scenarios/                 # Scenario definitions (YAML)
+├── templates/                 # Flask HTML templates
 └── reports/                   # Generated reports (gitignored)
 ```
 
