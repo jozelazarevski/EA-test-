@@ -11,6 +11,16 @@ from src.conversation.yaml_loader import (
     load_scenarios_dir,
     YAMLValidationError,
 )
+from src.conversation.scoring import (
+    QualityTier,
+    Trajectory,
+    ScoringResult,
+    ConversationScore,
+    score_evaluation,
+    score_conversation,
+    tier_from_score,
+    DIMENSION_WEIGHTS,
+)
 
 __all__ = [
     # Core
@@ -30,4 +40,13 @@ __all__ = [
     "load_personas_dir",
     "load_scenarios_dir",
     "YAMLValidationError",
+    # Scoring
+    "QualityTier",
+    "Trajectory",
+    "ScoringResult",
+    "ConversationScore",
+    "score_evaluation",
+    "score_conversation",
+    "tier_from_score",
+    "DIMENSION_WEIGHTS",
 ]
