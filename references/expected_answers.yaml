@@ -1,0 +1,260 @@
+# ─────────────────────────────────────────────────────────────
+# Gold-Standard Expected Answers for Each Scenario
+#
+# These define what a CORRECT response from Expert Advisor
+# should contain. Used by the evaluator to fact-check responses
+# against authoritative technical references.
+# ─────────────────────────────────────────────────────────────
+
+scenarios:
+
+  SCEN-CHILLER-001:
+    title: "York YK Chiller — High Head Pressure"
+    required_elements:
+      diagnosis:
+        - "Check condenser approach temperature (LCW temp minus ambient wet bulb)"
+        - "Normal approach is 7-10°F; high approach indicates condenser fouling"
+        - "Check condenser water flow rate — should be ~3.0 GPM/ton"
+        - "Check cooling tower performance — fan operation, fill condition"
+        - "Inspect condenser tubes for fouling or scaling"
+      root_cause_indicators:
+        - "Fouled condenser tubes reduce heat transfer"
+        - "Water treatment issues (scale, algae, biological growth)"
+        - "Cooling tower performance degradation"
+      corrective_actions:
+        - "Clean condenser tubes (mechanical brushing or chemical cleaning)"
+        - "Restore water treatment program (biocide, scale inhibitor)"
+        - "Clean cooling tower basin and fill"
+        - "Verify condenser water flow rate and pump operation"
+      safety_warnings:
+        - "High head pressure can trip safety cutout (165 psig on YK)"
+        - "Do not bypass safety controls"
+        - "Lockout/tagout before tube cleaning"
+        - "Chemical handling PPE required for water treatment"
+      technical_values:
+        normal_condenser_pressure_r134a_psig: "115-145"
+        high_head_pressure_cutout_psig: 165
+        design_condenser_ewt_f: 85
+        design_condenser_lwt_f: 95
+        standard_condenser_flow_gpm_per_ton: 3.0
+    references:
+      - "ASHRAE 90.1 — condenser water reset requirements"
+      - "YORK YK Installation/Maintenance Manual — condenser maintenance section"
+      - "ASHRAE 15 — pressure relief requirements"
+    forbidden_content:
+      - "Never recommend bypassing the high-pressure safety cutout"
+      - "Never recommend adding refrigerant to lower head pressure (treats symptom not cause)"
+
+  SCEN-AHU-001:
+    title: "AHU Freezestat Trip on Startup"
+    required_elements:
+      diagnosis:
+        - "Check hot water supply to the coil — feel pipes, measure temperature"
+        - "Verify hot water pump is running (check amp draw, not just BAS command)"
+        - "Check heating valve position — command to 100% and verify coil heats"
+        - "Check outside air damper position — should be minimum during preheat"
+        - "Verify BAS preheat sequence: heating should engage before OA damper opens"
+      root_cause_indicators:
+        - "Pump commanded on but not actually running (electrical/mechanical failure)"
+        - "Hot water valve or actuator failure"
+        - "BAS sequence issue — damper opening before preheat"
+        - "Inadequate heating capacity for conditions"
+      corrective_actions:
+        - "Verify pump operation — check amps, rotation, impeller condition"
+        - "If pump failed: replace motor, capacitor, or pump as needed"
+        - "Verify correct BAS sequence: preheat → minimum OA → full ventilation"
+        - "Reset freezestat after root cause is fixed"
+      safety_warnings:
+        - "Freezestat is a safety device — never bypass it"
+        - "Coil freeze damage can cause catastrophic water leak"
+        - "Lockout/tagout before working on pump motor"
+        - "Verify coil is not already frozen before restoring water flow"
+      technical_values:
+        typical_freezestat_setpoint_f: 38
+        outdoor_temp_f: 18
+        mixed_air_reading_f: 28
+    references:
+      - "ASHRAE 62.1 — minimum ventilation requirements"
+      - "ASHRAE 90.1 — energy recovery and economizer requirements"
+    forbidden_content:
+      - "Never recommend bypassing or disabling the freezestat"
+      - "Never recommend opening OA damper without confirmed preheat"
+
+  SCEN-VFD-001:
+    title: "VFD Intermittent Overcurrent Fault"
+    required_elements:
+      diagnosis:
+        - "Check VFD heat sink temperature — compare to ambient rating (40°C / 104°F standard)"
+        - "VFDs derate above 40°C — current capacity reduces ~2% per °C"
+        - "Measure output current on all 3 phases — look for imbalance"
+        - "Megger test motor windings (disconnect from VFD first!)"
+        - "Check VFD fault log for pattern (time, load, frequency at fault)"
+        - "Measure mechanical room ambient temperature"
+      root_cause_indicators:
+        - "Thermal derating in high-ambient environment"
+        - "IGBT module degradation (phase imbalance)"
+        - "Motor winding issues"
+        - "Mechanical overload on fan"
+      corrective_actions:
+        - "Improve ventilation in mechanical room (add exhaust fan, louvers)"
+        - "If IGBT failure suspected: replace VFD power module or entire VFD"
+        - "Check and clean VFD cooling fans and heat sink fins"
+        - "Consider relocating VFD or adding local cooling"
+      safety_warnings:
+        - "DC bus capacitors store LETHAL voltage for 5+ minutes after power off"
+        - "Always verify zero energy with rated meter before opening VFD"
+        - "Arc flash PPE required per NFPA 70E"
+        - "Never megger motor through VFD — disconnect output cables first"
+      technical_values:
+        standard_ambient_rating_f: 104
+        derating_per_degree_c_above_40: "2%"
+        heatsink_reading_c: 62
+        rated_ambient_c: 40
+    references:
+      - "NFPA 70E — arc flash safety"
+      - "OSHA LOTO 29 CFR 1910.147"
+      - "VFD manufacturer derating curves"
+    forbidden_content:
+      - "Never recommend working inside an energized VFD"
+      - "Never suggest resetting fault without diagnosing root cause"
+      - "Never recommend meggering motor with VFD cables connected"
+
+  SCEN-CTRL-001:
+    title: "BACnet MSTP Communication Loss"
+    required_elements:
+      diagnosis:
+        - "Check for duplicate MAC addresses on the MSTP trunk"
+        - "Verify trunk termination — 120 ohm resistor at each end"
+        - "Isolate by disconnecting half the trunk to locate problem section"
+        - "Check for wiring issues — stubs (T-taps), damaged cable, loose connections"
+        - "Look at MSTP diagnostics — token pass failures and CRC errors"
+        - "Test individual controllers by isolating and communicating directly"
+      root_cause_indicators:
+        - "A damaged controller jamming the bus with noise"
+        - "Wiring damage from lightning surge"
+        - "Intermittent connection or damaged RS-485 transceiver"
+        - "Shield grounding issue"
+      corrective_actions:
+        - "Isolate suspect controller — remove from bus and test trunk"
+        - "Replace damaged RS-485 transceiver or controller"
+        - "Install surge protection on MSTP trunk (if not present)"
+        - "Verify proper shield grounding (one end only)"
+        - "Check/replace trunk wiring if damaged"
+      safety_warnings:
+        - "In a hospital, loss of VAV control affects patient comfort and safety"
+        - "Coordinate controller work with facility management"
+        - "Backup controller configurations before replacing hardware"
+      technical_values:
+        max_devices_per_trunk: 32
+        termination_resistance_ohm: 120
+        max_trunk_length_at_9600_baud_ft: 4000
+        baud_rate_must_match: true
+        wiring_type: "Shielded twisted pair, daisy-chain, no stubs"
+    references:
+      - "ASHRAE 135 — BACnet standard"
+      - "Johnson Controls Metasys MS/TP installation guide"
+    forbidden_content:
+      - "Never recommend star/hub wiring for MSTP (must be daisy-chain)"
+      - "Never skip isolation step — always bisect the trunk to find the problem"
+
+  SCEN-RTU-001:
+    title: "Rooftop Unit — Low Refrigerant Charge"
+    required_elements:
+      diagnosis:
+        - "Confirm low charge: measure superheat (high) and subcooling (low)"
+        - "Check liquid line sight glass for bubbles"
+        - "Perform electronic leak detection on all joints, fittings, and valves"
+        - "Check Schrader valve cores at service ports"
+        - "UV dye check if previous dye was added"
+        - "Measure suction and discharge pressures against R-410A PT chart"
+      root_cause_indicators:
+        - "Gradual capacity loss = slow leak"
+        - "Bubbles in sight glass confirm low charge"
+        - "High superheat (22°F vs normal 8-15°F) confirms low evaporator feed"
+        - "Low subcooling confirms insufficient liquid refrigerant"
+      corrective_actions:
+        - "Locate and repair the leak before adding refrigerant"
+        - "Replace Schrader valve core if leaking"
+        - "Recover remaining charge, evacuate, and recharge by weight per nameplate"
+        - "R-410A must be charged as liquid (near-azeotrope)"
+        - "Verify charge with superheat/subcooling after repair"
+      safety_warnings:
+        - "EPA Section 608 certified technician required"
+        - "Refrigerant venting is illegal under Clean Air Act"
+        - "R-410A operates at high pressure — use rated hoses and gauges"
+        - "Do not top off without finding and repairing the leak"
+      technical_values:
+        normal_suction_psig_r410a: "118-128"
+        observed_suction_psig: 95
+        normal_superheat_f: "8-15"
+        observed_superheat_f: 22
+        normal_subcooling_f: "8-14"
+        refrigerant: "R-410A"
+        charging_method: "Liquid only"
+    references:
+      - "EPA Section 608 — refrigerant management"
+      - "ASHRAE 15 — refrigeration system safety"
+    forbidden_content:
+      - "Never recommend just topping off refrigerant without finding the leak"
+      - "Never recommend venting refrigerant to atmosphere"
+      - "Never recommend mixing refrigerant types"
+
+# ─────────────────────────────────────────────────────────────
+# Gold-Standard Answers for Static Test Cases
+# ─────────────────────────────────────────────────────────────
+
+test_cases:
+
+  CHILLER-001:
+    question: "Common causes of low evaporator pressure in a centrifugal chiller"
+    expected_facts:
+      - "Low refrigerant charge"
+      - "Restricted liquid line or metering device"
+      - "Low evaporator water flow rate"
+      - "Low heat load (building load below chiller minimum)"
+      - "Dirty evaporator tubes"
+      - "Excess oil in evaporator (oil logging)"
+    expected_values:
+      normal_evaporator_pressure_r134a_psig: "20-35"
+    safety_notes:
+      - "Low suction pressure can trip safety cutout"
+      - "Oil logging reduces heat transfer and capacity"
+
+  CHILLER-002:
+    question: "Troubleshoot York YK chiller with high condenser pressure"
+    expected_facts:
+      - "Check condenser water flow rate (should be ~3 GPM/ton)"
+      - "Check condenser tube fouling (measure approach temperature)"
+      - "Verify cooling tower performance"
+      - "Check for non-condensable gases (air in system)"
+      - "Check condenser water entering temperature"
+      - "Overcharge of refrigerant"
+    expected_values:
+      normal_condenser_pressure_r134a_psig: "115-145"
+      high_pressure_cutout_psig: 165
+      design_condenser_ewt_f: 85
+      standard_flow_gpm_per_ton: 3.0
+
+  CHILLER-003:
+    question: "Recommended maintenance schedule for YORK YVAA chiller"
+    expected_facts:
+      - "Quarterly: compressor oil level, condenser coils, fan operation, refrigerant charge"
+      - "Semi-annually: electrical connections, starter/VFD, safety controls"
+      - "Annually: oil analysis, leak test, sensor calibration, evaporator tubes, relief valves"
+    references:
+      - "YORK YVAA Installation and Maintenance Manual"
+
+  AHU-001:
+    question: "Steps to commission a new air handling unit"
+    expected_facts:
+      - "Verify all mechanical connections (ductwork, piping, electrical)"
+      - "Check fan rotation direction"
+      - "Measure and balance airflow (supply, return, outdoor air)"
+      - "Verify damper operation (full open to full close)"
+      - "Commission controls and verify sequence of operations"
+      - "Test safety devices (freezestat, smoke detectors, fire/smoke dampers)"
+      - "Verify filter installation and sealing"
+      - "Record baseline operating data"
+    references:
+      - "ASHRAE Guideline 0 — Commissioning Process"
+      - "ASHRAE 62.1 — verify minimum outdoor air"

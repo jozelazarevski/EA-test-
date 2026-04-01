@@ -11,11 +11,25 @@ scores. See src/conversation/scoring.py for the full model.
 """
 
 import json
+import logging
 from typing import Optional
 
 import anthropic
 
 from config import ANTHROPIC_API_KEY, LLM_MODEL
+from reference_checker import ReferenceChecker
+
+logger = logging.getLogger(__name__)
+
+# Module-level reference checker (loaded lazily on first use)
+_reference_checker: ReferenceChecker | None = None
+
+
+def _get_reference_checker() -> ReferenceChecker:
+    global _reference_checker
+    if _reference_checker is None:
+        _reference_checker = ReferenceChecker()
+    return _reference_checker
 
 
 def get_client() -> anthropic.Anthropic:
@@ -34,6 +48,8 @@ def evaluate_response(
     response_text: str,
     conversation_history: Optional[list] = None,
     model: str = None,
+    scenario_id: str = None,
+    test_id: str = None,
 ) -> dict:
     """
     Use an LLM to evaluate an Expert Advisor response from a persona's perspective.
@@ -71,6 +87,18 @@ def evaluate_response(
             conv_context += f"User: {turn['question']}\nAssistant: {turn['response']}\n\n"
         conv_context += "</conversation_history>\n"
 
+    # Build reference context from authoritative sources
+    ref_context = ""
+    try:
+        checker = _get_reference_checker()
+        ref_context = checker.build_reference_context(
+            scenario_id=scenario_id,
+            test_id=test_id,
+            question=question,
+        )
+    except Exception as exc:
+        logger.debug("Reference lookup failed (non-critical): %s", exc)
+
     evaluation_prompt = f"""You are an expert HVAC quality assurance evaluator. You must evaluate a response
 from an AI assistant called "Expert Advisor" (by Johnson Controls) that helps with HVAC questions.
 
@@ -89,6 +117,8 @@ The evaluation criteria for this persona are:
 {json.dumps(persona.get('evaluation_focus', []), indent=2)}
 
 {conv_context}
+{ref_context}
+
 <current_exchange>
 User Question: {question}
 
@@ -97,6 +127,8 @@ Expert Advisor Response:
 </current_exchange>
 
 ## Instructions
+
+{"IMPORTANT: Authoritative reference data is provided above in <reference_data> tags. You MUST compare the Expert Advisors response against these references. For accuracy scoring, check specific values, procedures, and safety warnings against the reference data. Cite which reference points were matched or missed." if ref_context else ""}
 
 Evaluate the response using a FIVE-TIER quality model (not just pass/fail):
 - Exemplary (9-10): Exceeds expectations — accurate, complete, safe, perfectly tailored
@@ -164,11 +196,21 @@ Return a JSON object with EXACTLY this structure (no markdown, just raw JSON):
     "reasoning_chain": [
         "<Step 1: What the user asked and what kind of answer is needed>",
         "<Step 2: What the response actually provided>",
-        "<Step 3: Key gaps, errors, or strengths identified>",
-        "<Step 4: How safety-critical is this topic?>",
+        "<Step 3: Key gaps, errors, or strengths identified — compare against reference data if provided>",
+        "<Step 4: How safety-critical is this topic? Were required safety warnings present?>",
         "<Step 5: Therefore, the overall quality is...>"
     ],
-    "verdict_explanation": "<2-3 sentences: 'This response is [tier] because [primary reasons]. The main factor driving this verdict is [X].' Be specific.>",
+    "reference_comparison": {{
+        "facts_confirmed": ["<fact from response that matches reference data>"],
+        "facts_missing": ["<important fact from reference data NOT in response>"],
+        "facts_incorrect": ["<claim in response that contradicts reference data>"],
+        "values_checked": [
+            {{"claim": "<value stated in response>", "reference": "<authoritative value>", "match": true|false}}
+        ],
+        "standards_cited_correctly": ["<standard mentioned correctly>"],
+        "standards_missing": ["<applicable standard not mentioned>"]
+    }},
+    "verdict_explanation": "<2-3 sentences: 'This response is [tier] because [primary reasons]. The main factor driving this verdict is [X].' Be specific. If reference data was provided, cite specific matches or mismatches.>",
     "strengths": ["<strength 1>", "<strength 2>"],
     "weaknesses": ["<weakness 1, if any>"],
     "red_flags": ["<any dangerous, incorrect, or inappropriate content — empty list if none>"],
@@ -176,7 +218,7 @@ Return a JSON object with EXACTLY this structure (no markdown, just raw JSON):
     "summary": "<2-3 sentence overall assessment>"
 }}
 
-Be rigorous but fair. Deduction guidelines:
+Be rigorous but fair. When reference data is provided, use it as the primary source of truth for accuracy scoring. Deduction guidelines:
 - Incorrect technical information: -3 to -5 on accuracy (major risk)
 - Missing safety warnings for dangerous procedures: -4 to -6 on safety
 - Response too technical or too simple for the persona: -2 to -3 on persona_fit

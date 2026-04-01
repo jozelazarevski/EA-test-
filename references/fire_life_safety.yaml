@@ -1,0 +1,178 @@
+# ─────────────────────────────────────────────────────────────
+# Fire & Life Safety Reference Data
+#
+# Sources: NFPA standards (public editions), IBC/IMC requirements,
+# UL listings, and FM Global data sheets (publicly available).
+# ─────────────────────────────────────────────────────────────
+
+nfpa_standards:
+  nfpa_72:
+    title: "National Fire Alarm and Signaling Code"
+    scope: "Installation, testing, and maintenance of fire alarm systems"
+    key_requirements:
+      - "Fire alarm control panel (FACP) must be UL listed"
+      - "Smoke detectors required in return air plenums >2000 CFM (NFPA 90A)"
+      - "Duct smoke detectors must be tested annually"
+      - "Notification appliances must meet audibility requirements (75 dBA min or 15 dBA above ambient)"
+      - "Fire alarm signals must be transmitted to supervising station within 90 seconds"
+      - "Initiating device circuits must be monitored for integrity"
+    inspection_frequencies:
+      visual_inspection: "Quarterly for most devices"
+      functional_testing: "Annually for smoke detectors, heat detectors"
+      sensitivity_testing: "Per manufacturer's specs or within 2 years of installation"
+      battery_testing: "Semi-annually (load test annually)"
+
+  nfpa_90a:
+    title: "Standard for the Installation of Air-Conditioning and Ventilating Systems"
+    scope: "Fire protection for HVAC duct systems"
+    key_requirements:
+      - "Smoke detectors required in supply air ducts serving >2000 CFM"
+      - "Smoke detectors required in return air openings serving >15,000 CFM or >5 stories"
+      - "Upon smoke detection: shut down AHU fan, close outdoor air damper"
+      - "Fire dampers required at rated fire barriers (1.5 hour min)"
+      - "Smoke dampers required at smoke barriers and smoke partitions"
+      - "Duct material must be non-combustible for supply and return"
+      - "Flexible duct connections limited to 14 inches"
+    ahu_shutdown_sequence:
+      - "Duct smoke detector activates"
+      - "Signal sent to FACP (fire alarm control panel)"
+      - "AHU supply and return fans shut down"
+      - "Outdoor air damper closes"
+      - "Fire/smoke dampers close in affected zone"
+      - "Alarm annunciated at FACP and BAS"
+    testing:
+      - "Test duct smoke detectors annually"
+      - "Test fire/smoke dampers every 4 years (6 years after first test per NFPA 80)"
+      - "Verify AHU shutdown on smoke detection"
+      - "Verify damper closure on alarm"
+
+  nfpa_80:
+    title: "Standard for Fire Doors and Other Opening Protectives"
+    scope: "Fire dampers and smoke dampers in HVAC systems"
+    fire_damper_requirements:
+      - "Fire dampers required where ducts penetrate fire-rated barriers"
+      - "Rated 1.5 hours for 1-2 hour barriers, 3 hours for 3+ hour barriers"
+      - "Must close automatically upon fusible link activation (typically 165°F)"
+      - "Must be accessible for inspection and testing"
+    smoke_damper_requirements:
+      - "Smoke dampers required at smoke barriers"
+      - "Actuated by smoke detector or fire alarm system"
+      - "Must close within specified leakage class (Class I, II, or III)"
+      - "Motor-operated with spring-return to closed on power failure"
+    testing_schedule:
+      - "Initial test: 1 year after installation"
+      - "Subsequent tests: every 4 years (after initial pass)"
+      - "If damper fails: repair/replace and retest within 1 year"
+      - "Hospital occupancies: every 6 years per CMS requirements"
+
+  nfpa_13:
+    title: "Standard for the Installation of Sprinkler Systems"
+    scope: "Automatic sprinkler system design and installation"
+    hvac_interactions:
+      - "Sprinkler heads required in mechanical rooms"
+      - "Maintain minimum 18 inches clearance below sprinkler deflectors"
+      - "HVAC equipment must not obstruct sprinkler spray pattern"
+      - "Duct work may require sprinkler protection on top side per AHJ"
+      - "Fire pump room requires independent HVAC (or no HVAC if ambient ok)"
+
+  nfpa_101:
+    title: "Life Safety Code"
+    scope: "Egress, fire protection features, building services"
+    hvac_requirements:
+      - "Stairwell pressurization systems must maintain 0.05 in. w.c. minimum"
+      - "Elevator shaft pressurization per smoke control requirements"
+      - "Smoke control systems must be tested and maintained"
+      - "Emergency power for fire alarm, smoke control, stairwell pressurization"
+
+bas_fire_integration:
+  description: "Integration between BAS (Metasys/FX) and fire alarm systems"
+  source: "Johnson Controls Metasys Fire System Integration documentation"
+
+  integration_methods:
+    hardwired:
+      description: "Direct relay/contact interfaces between FACP and BAS"
+      common_points:
+        - "General fire alarm (binary input to BAS)"
+        - "Duct smoke detector zones (binary inputs)"
+        - "Sprinkler flow switches (binary inputs)"
+        - "Fire/smoke damper position feedback (binary inputs)"
+        - "AHU shutdown command (binary output from FACP)"
+      advantages: ["Simple", "Reliable", "Code-compliant"]
+      notes:
+        - "Fire alarm system must maintain independent control — BAS cannot override"
+        - "BAS monitors fire alarm status but does NOT control fire alarm devices"
+        - "Hardwired interlock preferred by AHJ (Authority Having Jurisdiction)"
+
+    bacnet_integration:
+      description: "BACnet communication between FACP and BAS"
+      capabilities:
+        - "Read fire alarm status and zone information"
+        - "Display fire alarm events on BAS operator workstation"
+        - "Automated HVAC response to fire alarm zones"
+      limitations:
+        - "BAS must NOT be sole means of fire safety control"
+        - "Hardwired interlocks still required for life safety functions"
+        - "Network failure must not prevent fire alarm operation"
+
+  hvac_response_to_fire:
+    general_alarm:
+      - "Shut down all AHUs in affected fire zone"
+      - "Close all fire/smoke dampers at zone boundaries"
+      - "Close outdoor air dampers on affected AHUs"
+      - "Return fans shut down (prevent smoke spread)"
+    smoke_control_mode:
+      - "Pressurize stairwells (supply fans on, doors closed)"
+      - "Exhaust smoke from fire floor"
+      - "Pressurize floors above and below fire floor"
+      - "Maintain elevator lobby pressurization"
+    kitchen_hood_fire:
+      - "Kitchen hood suppression system activates"
+      - "Gas supply shuts off (interlock)"
+      - "Kitchen exhaust fan continues (per AHJ — may vary)"
+      - "Make-up air unit shuts down or reduces to minimum"
+
+  commissioning_fire_integration:
+    - "Verify all hardwired interlocks: trigger FACP alarm, confirm BAS response"
+    - "Test each duct smoke detector → AHU shutdown sequence"
+    - "Test fire/smoke damper closure → verify position feedback to BAS"
+    - "Test sprinkler flow switch → alarm annunciation on BAS"
+    - "Verify BAS displays fire alarm zone information correctly"
+    - "Test elevator recall on fire alarm (separate system but verify)"
+    - "Document all interlock wiring between FACP and BAS panels"
+    - "Annual re-verification of fire/BAS integration required"
+
+  safety_warnings:
+    - "BAS must NEVER override fire alarm system commands"
+    - "Fire alarm system must operate independently of BAS"
+    - "Power failure to BAS must not affect fire alarm operation"
+    - "All fire/smoke dampers must fail-safe to CLOSED position"
+    - "Licensed fire alarm technician required for FACP work"
+    - "AHJ approval required for any fire integration changes"
+
+smoke_control_systems:
+  description: "Engineered smoke control for high-rise and large buildings"
+  standards:
+    - "NFPA 92 — Standard for Smoke Control Systems"
+    - "IBC Section 909 — Smoke Control Systems"
+  types:
+    stairwell_pressurization:
+      description: "Positive pressure in stairwells to prevent smoke entry"
+      requirements:
+        - "Minimum 0.05 in. w.c. across closed doors"
+        - "Maximum 0.35 in. w.c. (door must be openable with max 30 lbs force)"
+        - "Dedicated fans with emergency power"
+        - "Barometric relief dampers to prevent over-pressurization"
+      testing:
+        - "Test with all doors closed and with one door open on fire floor"
+        - "Measure pressure differential at each floor"
+        - "Verify fan operation on emergency power"
+    zoned_smoke_control:
+      description: "Exhaust smoke from fire zone, pressurize adjacent zones"
+      components:
+        - "Smoke exhaust fans (dedicated or AHU in smoke mode)"
+        - "Smoke control dampers"
+        - "Fire fighter's smoke control station (FSCS)"
+      bas_integration:
+        - "BAS must support smoke control mode sequences"
+        - "FSCS provides manual override of automatic sequences"
+        - "BAS displays system status but FSCS has priority"

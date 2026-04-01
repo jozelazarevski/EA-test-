@@ -352,6 +352,63 @@ class PersonaReportGenerator:
             items = "".join(f"<li>{self._escape(s)}</li>" for s in suggestions)
             suggestions_html = f'<div class="suggestions"><strong>Improvement suggestions:</strong><ul>{items}</ul></div>'
 
+        # ── Reference comparison ──────────────────────────────────
+        ref_html = ""
+        ref_cmp = eval_data.get("reference_comparison", {})
+        if ref_cmp and any(ref_cmp.get(k) for k in ref_cmp):
+            ref_html = '<details class="ref-comparison"><summary>Reference Comparison</summary><div class="ref-comparison-body">'
+
+            # Facts confirmed
+            confirmed = ref_cmp.get("facts_confirmed", [])
+            if confirmed:
+                items = "".join(f"<li>{self._escape(f)}</li>" for f in confirmed)
+                ref_html += f'<div class="ref-section ref-confirmed"><strong>&#10003; Facts Confirmed ({len(confirmed)})</strong><ul>{items}</ul></div>'
+
+            # Facts missing
+            missing = ref_cmp.get("facts_missing", [])
+            if missing:
+                items = "".join(f"<li>{self._escape(f)}</li>" for f in missing)
+                ref_html += f'<div class="ref-section ref-missing"><strong>&#9888; Facts Missing ({len(missing)})</strong><ul>{items}</ul></div>'
+
+            # Facts incorrect
+            incorrect = ref_cmp.get("facts_incorrect", [])
+            if incorrect:
+                items = "".join(f"<li>{self._escape(f)}</li>" for f in incorrect)
+                ref_html += f'<div class="ref-section ref-incorrect"><strong>&#10006; Facts Incorrect ({len(incorrect)})</strong><ul>{items}</ul></div>'
+
+            # Values checked
+            values = ref_cmp.get("values_checked", [])
+            if values:
+                rows = ""
+                for v in values:
+                    match = v.get("match", False)
+                    icon = "&#10003;" if match else "&#10006;"
+                    color = "#276749" if match else "#c53030"
+                    rows += (
+                        f'<tr><td style="color:{color}">{icon}</td>'
+                        f'<td>{self._escape(v.get("claim", ""))}</td>'
+                        f'<td>{self._escape(v.get("reference", ""))}</td></tr>'
+                    )
+                ref_html += (
+                    f'<div class="ref-section ref-values"><strong>Values Checked</strong>'
+                    f'<table class="ref-table"><thead><tr><th></th><th>Claim</th><th>Reference</th></tr></thead>'
+                    f'<tbody>{rows}</tbody></table></div>'
+                )
+
+            # Standards cited correctly
+            cited = ref_cmp.get("standards_cited_correctly", [])
+            if cited:
+                items = "".join(f"<li>{self._escape(s)}</li>" for s in cited)
+                ref_html += f'<div class="ref-section ref-standards-ok"><strong>&#10003; Standards Cited Correctly</strong><ul>{items}</ul></div>'
+
+            # Standards missing
+            std_missing = ref_cmp.get("standards_missing", [])
+            if std_missing:
+                items = "".join(f"<li>{self._escape(s)}</li>" for s in std_missing)
+                ref_html += f'<div class="ref-section ref-standards-miss"><strong>&#9888; Standards Not Cited</strong><ul>{items}</ul></div>'
+
+            ref_html += '</div></details>'
+
         # ── Follow-up metadata ────────────────────────────────────
         fu_meta = ""
         if is_followup and turn.get("follow_up_metadata"):
@@ -386,6 +443,7 @@ class PersonaReportGenerator:
             {eval_html}
             {reasoning_html}
             {sw_html}
+            {ref_html}
             {suggestions_html}
         </div>"""
 
@@ -609,6 +667,24 @@ class PersonaReportGenerator:
         .coherence-summary { font-size: 13px; color: #2d3748; margin-top: 6px; padding-top: 6px; border-top: 1px solid #e2e8f0; }
         .coherence-issues { font-size: 12px; color: #c53030; margin-top: 6px; }
         .coherence-issues ul { margin-left: 16px; margin-top: 4px; }
+
+        /* Reference comparison */
+        .ref-comparison { margin: 8px 0; font-size: 12px; }
+        .ref-comparison summary { cursor: pointer; color: #2b6cb0; font-weight: 600; padding: 4px 0; }
+        .ref-comparison summary:hover { text-decoration: underline; }
+        .ref-comparison-body { margin-top: 6px; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+        .ref-section { padding: 8px; border-radius: 6px; }
+        .ref-section ul { margin-left: 16px; margin-top: 4px; }
+        .ref-section li { margin-bottom: 2px; }
+        .ref-confirmed { background: #f0fff4; color: #276749; }
+        .ref-missing { background: #fffaf0; color: #c05621; }
+        .ref-incorrect { background: #fff5f5; color: #c53030; }
+        .ref-values { background: #f7fafc; grid-column: 1 / -1; }
+        .ref-standards-ok { background: #f0fff4; color: #276749; }
+        .ref-standards-miss { background: #fffaf0; color: #c05621; }
+        .ref-table { width: 100%; border-collapse: collapse; margin-top: 4px; font-size: 12px; }
+        .ref-table th, .ref-table td { padding: 3px 8px; text-align: left; border-bottom: 1px solid #e2e8f0; }
+        .ref-table th { color: #4a5568; font-weight: 600; }
 
         .footer { text-align: center; color: #a0aec0; font-size: 12px; margin-top: 40px; }
         """

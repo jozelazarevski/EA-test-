@@ -1,0 +1,423 @@
+# ─────────────────────────────────────────────────────────────
+# Johnson Controls BAS Documentation Reference
+#
+# Source: Public JCI product documentation, spec sheets, and
+# technical bulletins from docs.johnsoncontrols.com/bas/
+# ─────────────────────────────────────────────────────────────
+
+source_url: "https://docs.johnsoncontrols.com/bas/"
+
+metasys:
+  description: "Johnson Controls Metasys Building Automation System — flagship BAS platform"
+  current_version: "Metasys 12.0"
+
+  architecture:
+    supervisory_level:
+      server:
+        name: "Metasys Server (ADS/ADX)"
+        description: "Application and Data Server — central management platform"
+        variants:
+          - "ADS (Application and Data Server) — standard deployment"
+          - "ADX (Application and Data Server Extended) — high availability"
+        capabilities:
+          - "Centralized monitoring and control"
+          - "Alarm management and routing"
+          - "Trend data collection and archiving"
+          - "Scheduling and calendar management"
+          - "Energy dashboards and reporting"
+          - "User management and access control"
+        supported_browsers:
+          - "Chrome (recommended)"
+          - "Microsoft Edge"
+        ports:
+          https: 443
+          bacnet_ip: 47808
+
+      open_application_server:
+        name: "OAS (Open Application Server)"
+        description: "Cloud-connected supervisory platform for Metasys 12.0+"
+        features:
+          - "Cloud or on-premises deployment"
+          - "RESTful API access"
+          - "Mobile-responsive UI"
+
+    network_level:
+      nae:
+        name: "NAE (Network Automation Engine)"
+        models:
+          - model: "NAE45"
+            description: "Standard network engine"
+            max_points: 600
+            protocols: ["BACnet/IP", "BACnet MS/TP", "N2"]
+          - model: "NAE55"
+            description: "High-capacity network engine"
+            max_points: 1500
+            protocols: ["BACnet/IP", "BACnet MS/TP", "N2", "LON"]
+        features:
+          - "Standalone operation — continues if server connection lost"
+          - "Built-in web interface for local access"
+          - "Integrated BACnet/IP router to MS/TP"
+          - "Alarm notification via email"
+        commissioning:
+          - "Configure IP address via launcher tool or front-panel display"
+          - "Map to Metasys Server via Site Management Portal (SMP)"
+          - "Download application database from SCT (System Configuration Tool)"
+          - "Verify communication to all field controllers"
+
+      nce:
+        name: "NCE (Network Control Engine)"
+        models:
+          - model: "NCE25"
+            description: "Mid-range engine replacing NAE35"
+            max_points: 300
+            protocols: ["BACnet/IP", "BACnet MS/TP"]
+        features:
+          - "Compact form factor"
+          - "Integrated I/O points available"
+          - "DIN rail mounting"
+
+    field_level:
+      fec:
+        name: "FEC (Field Equipment Controller)"
+        models:
+          - model: "FEC2611"
+            description: "General-purpose field controller"
+            io_points: "16 configurable I/O"
+            protocols: ["BACnet MS/TP"]
+          - model: "FEC2621"
+            description: "VAV controller with integrated actuator output"
+            io_points: "12 configurable I/O"
+          - model: "FEC2611CF"
+            description: "Chilled ceiling / fan coil controller"
+        programming: "GX (Graphical Programming) via SCT"
+        power: "24VAC"
+
+      cvm:
+        name: "CVM (Controller for VAV Modular)"
+        description: "Dedicated VAV box controller"
+        features:
+          - "Integrated differential pressure sensor"
+          - "Configurable for pressure-dependent or pressure-independent"
+          - "Reheat support (hot water or electric)"
+
+    protocols:
+      bacnet_ip:
+        description: "Primary supervisory network protocol"
+        port: 47808
+        usage: "NAE/NCE to Server, NAE-to-NAE communication"
+        features:
+          - "BBMD (BACnet Broadcast Management Device) for multi-subnet"
+          - "Foreign device registration"
+          - "COV (Change of Value) subscriptions"
+
+      bacnet_mstp:
+        description: "Field bus protocol for controller communication"
+        wiring:
+          type: "Shielded twisted pair (STP)"
+          topology: "Daisy-chain ONLY — no stubs, no star wiring"
+          shield_grounding: "Ground at ONE end only"
+          termination: "120 ohm resistor at each end of trunk"
+        specifications:
+          baud_rates: [9600, 19200, 38400, 76800]
+          max_devices_per_trunk: 32
+          max_trunk_length:
+            at_9600_baud_ft: 4000
+            at_19200_baud_ft: 4000
+            at_38400_baud_ft: 4000
+            at_76800_baud_ft: 2000
+          mac_address_range: "1-127 (0 reserved)"
+        troubleshooting:
+          common_issues:
+            - issue: "CRC errors"
+              causes: ["Noise on bus", "Missing termination", "Bad wiring", "Stub (T-tap) connections"]
+              fix: "Verify termination, remove stubs, check for EMI sources near cable"
+            - issue: "Token pass failures"
+              causes: ["Device jamming bus", "Duplicate MAC address", "Failed RS-485 transceiver"]
+              fix: "Bisect trunk to isolate problem device, check MAC addresses"
+            - issue: "Intermittent communication"
+              causes: ["Loose connection", "Shield grounded at both ends", "Cable damage"]
+              fix: "Inspect all connections, verify single-point shield ground"
+            - issue: "No communication to new device"
+              causes: ["Wrong MAC address", "Wrong baud rate", "Not on trunk"]
+              fix: "Verify MAC/baud at device, confirm physical wiring to trunk"
+
+      n2:
+        description: "Legacy JCI protocol (pre-BACnet)"
+        wiring: "RS-485, daisy-chain"
+        baud_rate: 9600
+        max_devices: 100
+        note: "Still found in many existing installations. N2 devices connect to NAE via N2 trunk."
+        migration: "N2-to-BACnet migration typically done at NAE level (NAE translates N2 to BACnet)"
+
+  tools:
+    sct:
+      name: "SCT (System Configuration Tool)"
+      description: "Offline engineering and programming tool for Metasys"
+      capabilities:
+        - "Create and edit controller programs (GX graphics)"
+        - "Define points, alarms, schedules, and trends"
+        - "Generate controller databases for download"
+        - "Network architecture design"
+      file_extension: ".msd (Metasys System Database)"
+
+    smp:
+      name: "SMP (Site Management Portal)"
+      description: "Web-based interface for system management"
+      access: "https://<server-ip>/SMP"
+      capabilities:
+        - "Online monitoring and command"
+        - "Alarm acknowledgment"
+        - "Schedule management"
+        - "Trend viewing"
+
+    launcher:
+      name: "Launcher"
+      description: "Desktop utility for NAE/NCE initial setup"
+      capabilities:
+        - "Discover engines on network"
+        - "Configure IP addresses"
+        - "Download databases"
+        - "Firmware updates"
+
+  commissioning_procedures:
+    server_setup:
+      - "Install Metasys Server software on Windows Server"
+      - "Configure SQL database for trend and alarm storage"
+      - "Set up user accounts and security roles"
+      - "Configure BACnet/IP communication (BBMD if multi-subnet)"
+      - "Map NAE engines to server via SMP"
+
+    nae_setup:
+      - "Mount NAE in control panel, connect 24VAC power and Ethernet"
+      - "Configure IP address using Launcher tool"
+      - "Download site database from SCT"
+      - "Verify communication to all MS/TP trunks"
+      - "Test alarm routing and notification"
+      - "Verify trending data collection"
+
+    field_controller_setup:
+      - "Mount FEC in control panel, wire 24VAC power"
+      - "Connect I/O points per wiring diagram"
+      - "Set MAC address and baud rate via DIP switches or software"
+      - "Wire to MS/TP trunk (daisy-chain)"
+      - "Download application from NAE"
+      - "Verify point values match field conditions"
+      - "Commission sequences: command outputs, verify operation"
+
+  common_troubleshooting:
+    nae_offline:
+      symptoms: ["NAE shows offline in SMP", "Cannot reach NAE web interface"]
+      checks:
+        - "Ping NAE IP address — verify network connectivity"
+        - "Check NAE front-panel status LEDs"
+        - "Verify Ethernet cable connection and switch port"
+        - "Check if NAE has correct IP/subnet/gateway"
+        - "Verify firewall rules allow BACnet/IP (UDP 47808)"
+        - "Power cycle NAE if unresponsive (wait 3 minutes for full boot)"
+
+    points_not_updating:
+      symptoms: ["Point values stuck or showing 'Unreliable'"]
+      checks:
+        - "Check MS/TP communication to field controller"
+        - "Verify field controller is online (check MS/TP diagnostics)"
+        - "Check physical I/O wiring at controller"
+        - "Verify point mapping in controller database"
+        - "Check for sensor failure (open/short circuit)"
+
+    alarm_flood:
+      symptoms: ["Excessive alarms overwhelming operators"]
+      checks:
+        - "Review alarm priority assignments — most alarms should NOT be critical"
+        - "Check for oscillating points (hunting control loop)"
+        - "Verify alarm deadbands are properly configured"
+        - "Check for failed sensor causing repeated alarms"
+        - "Review alarm routing — limit critical alarms to appropriate staff"
+
+facility_explorer:
+  description: "Johnson Controls Facility Explorer — mid-tier BAS for small-to-medium buildings"
+
+  architecture:
+    supervisory:
+      name: "FX Supervisory Controller"
+      models:
+        - model: "FX-PC1"
+          description: "Entry-level PC-based supervisor"
+        - model: "FX-PC2"
+          description: "Standard supervisor with advanced graphics"
+      features:
+        - "Built-in web server for browser-based access"
+        - "BACnet/IP and BACnet MS/TP support"
+        - "Integrated scheduling, trending, alarming"
+        - "JACE-based platform (Niagara Framework)"
+
+    field_controllers:
+      fx60:
+        name: "FX-60 Series"
+        description: "General-purpose programmable controller"
+        io_options: "8-36 I/O points depending on model"
+        protocols: ["BACnet MS/TP"]
+        programming: "FX-Tools (Niagara-based)"
+
+      fx80:
+        name: "FX-80 Series"
+        description: "Advanced programmable controller"
+        io_options: "Up to 36 I/O with expansion modules"
+        features:
+          - "Higher processing capacity"
+          - "Multiple protocol support"
+          - "Standalone scheduling and trending"
+
+      fx_zfr:
+        name: "FX-ZFR Series"
+        description: "Wireless zone controller for terminal units"
+        communication: "Wireless mesh (900 MHz or 2.4 GHz)"
+        applications:
+          - "VAV boxes"
+          - "Fan coil units"
+          - "Unit ventilators"
+        features:
+          - "Battery or wired power"
+          - "Integrated temperature sensor"
+          - "Wireless commissioning via mobile app"
+
+  tools:
+    fx_tools:
+      name: "FX-Tools"
+      description: "Engineering software for Facility Explorer"
+      based_on: "Niagara Framework (Tridium)"
+      capabilities:
+        - "Controller programming and configuration"
+        - "Graphics development"
+        - "Network design and commissioning"
+
+verasys:
+  description: "Johnson Controls Verasys — light commercial plug-and-play controls"
+  target_market: "Rooftop units, split systems, small buildings"
+
+  components:
+    controller:
+      name: "Verasys Equipment Controller"
+      features:
+        - "Pre-programmed for common HVAC equipment"
+        - "BACnet MS/TP communication"
+        - "Configurable via Verasys Tool mobile app"
+    thermostat:
+      name: "Verasys Connected Thermostat"
+      features:
+        - "Occupancy sensing"
+        - "Wireless mesh communication"
+        - "Cloud-connected for remote monitoring"
+    gateway:
+      name: "Verasys Gateway"
+      features:
+        - "BACnet-to-cloud bridge"
+        - "Remote monitoring and diagnostics"
+        - "Alarm notification via email/SMS"
+
+hvac_applications:
+  chiller_plant_control:
+    description: "Metasys chiller plant optimization"
+    key_features:
+      - "Chiller staging based on building load"
+      - "Condenser water reset for energy savings"
+      - "Chilled water supply temperature reset"
+      - "Primary-secondary or variable-primary pumping control"
+      - "Free cooling / waterside economizer sequencing"
+    typical_control_points:
+      - "Chilled water supply/return temperature"
+      - "Condenser water supply/return temperature"
+      - "Chiller status (run/fault/alarm)"
+      - "Chiller capacity (% RLA or kW)"
+      - "Pump status and speed"
+      - "Cooling tower fan speed"
+      - "Flow meters (chilled water and condenser water)"
+    common_issues:
+      - "Chillers short-cycling due to too-narrow staging differential"
+      - "Condenser water reset too aggressive — chiller trips on high head"
+      - "Lead/lag not rotating — uneven runtime"
+      - "CHW reset too aggressive — loss of cooling in zones"
+
+  ahu_control:
+    description: "Air handling unit control via Metasys/FX"
+    standard_sequences:
+      - "Mixed air temperature control (OA/RA damper modulation)"
+      - "Discharge air temperature control (heating/cooling coil valves)"
+      - "Duct static pressure control (supply fan VFD)"
+      - "Economizer: switch to OA when OA enthalpy < RA enthalpy"
+      - "Morning warm-up / cool-down sequences"
+      - "Demand-controlled ventilation (CO2-based OA reset)"
+      - "Preheat sequence: hot water valve opens BEFORE OA damper"
+    safety_interlocks:
+      - "Freezestat: shuts unit down if mixed air < 38°F (adjustable)"
+      - "Smoke detector: shuts unit down, closes dampers"
+      - "Fire/smoke damper monitoring"
+      - "High duct static pressure limit"
+      - "Filter differential pressure alarm"
+    troubleshooting:
+      discharge_air_too_high:
+        - "Check cooling coil valve — command to 100%, verify coil gets cold"
+        - "Check chilled water supply temperature"
+        - "Check CHW pump — is it running? Check amps"
+        - "Dirty coil — check DP across coil"
+        - "Economizer stuck in minimum position"
+      discharge_air_too_low:
+        - "Check heating coil valve — command to 100%, verify coil gets hot"
+        - "Check hot water supply temperature and pump"
+        - "OA damper stuck open beyond minimum"
+        - "Preheat sequence not engaging"
+
+  vav_box_control:
+    description: "Variable Air Volume box control"
+    control_modes:
+      cooling: "Modulate damper to maintain space temperature setpoint"
+      heating: "Damper at minimum, energize reheat (hot water or electric)"
+      deadband: "Damper at minimum, no reheat"
+    key_parameters:
+      - "Cooling maximum airflow (CFM)"
+      - "Heating minimum airflow (CFM)"
+      - "Cooling setpoint (typically 72-75°F)"
+      - "Heating setpoint (typically 68-70°F)"
+      - "Duct pressure at VAV inlet"
+    commissioning:
+      - "Verify airflow sensor calibrated (k-factor)"
+      - "Test damper full open to full close stroke"
+      - "Verify minimum and maximum airflow rates"
+      - "Check reheat operation (valve or electric stages)"
+      - "Verify BAS communication (point values match field)"
+      - "Test occupancy scheduling"
+    troubleshooting:
+      space_too_warm:
+        - "Check VAV damper position — should be modulating toward open"
+        - "Check discharge air temperature from AHU"
+        - "Check airflow — may be below design"
+        - "Verify space temperature sensor accuracy"
+        - "Check for duct restrictions or damper stuck"
+      space_too_cold:
+        - "Check reheat valve/element — command on, verify heat output"
+        - "Check hot water supply to reheat coil"
+        - "Check damper minimum setting — may be too high"
+        - "Verify heating setpoint"
+
+integration_protocols:
+  bacnet:
+    versions_supported: ["BACnet/IP", "BACnet MS/TP", "BACnet/SC (Secure Connect)"]
+    object_types_commonly_used:
+      - "Analog Input (AI) — sensor readings"
+      - "Analog Output (AO) — control signals (0-10V, 4-20mA)"
+      - "Analog Value (AV) — setpoints and parameters"
+      - "Binary Input (BI) — status contacts"
+      - "Binary Output (BO) — relay commands"
+      - "Binary Value (BV) — mode commands"
+      - "Multi-State Value (MSV) — mode selections"
+      - "Schedule — time-based scheduling"
+      - "Trend Log — historical data"
+
+  modbus:
+    description: "Supported for third-party equipment integration"
+    variants: ["Modbus RTU (RS-485)", "Modbus TCP/IP"]
+    usage: "Integrate chillers, boilers, generators, meters via Modbus gateway or direct NAE/FEC support"
+
+  lonworks:
+    description: "Legacy protocol supported on NAE55"
+    note: "Used in older JCI and third-party installations"
+    migration: "LON devices can connect to NAE55; new installations should use BACnet"

@@ -1,0 +1,150 @@
+# ─────────────────────────────────────────────────────────────
+# Refrigerant Technical Reference Data — Public Sources
+#
+# Sources: ASHRAE Fundamentals Handbook (public tables),
+# EPA GWP data, manufacturer published datasheets, AHRI data.
+# ─────────────────────────────────────────────────────────────
+
+refrigerants:
+  r134a:
+    name: "R-134a (1,1,1,2-Tetrafluoroethane)"
+    common_use: "Centrifugal chillers, automotive A/C, medium-temp refrigeration"
+    type: "HFC"
+    safety_group: "A1"
+    gwp: 1430
+    odp: 0
+    boiling_point_f: -15.1
+    critical_temp_f: 213.9
+    critical_pressure_psia: 588.7
+    operating_pressures:
+      typical_evaporator_psig: "20–35 (35–45°F evap temp)"
+      typical_condenser_psig: "115–145 (90–105°F cond temp)"
+    normal_superheat_range_f: "6–12"
+    normal_subcooling_range_f: "8–14"
+    oil_compatibility: "POE (polyolester)"
+    phase_out: "Kigali Amendment — phasedown by 2036"
+    safety_notes:
+      - "Non-flammable, non-toxic at normal concentrations"
+      - "Decomposes at high temperatures producing HF (hydrofluoric acid)"
+      - "Heavier than air — can displace oxygen in low areas"
+      - "ASHRAE 15 occupancy limit: 50,000 ppm"
+
+  r410a:
+    name: "R-410A (50% R-32, 50% R-125)"
+    common_use: "Residential and light commercial split systems, RTUs, heat pumps"
+    type: "HFC blend (near-azeotrope)"
+    safety_group: "A1"
+    gwp: 2088
+    odp: 0
+    boiling_point_f: -61.9
+    critical_temp_f: 162.0
+    critical_pressure_psia: 723.5
+    operating_pressures:
+      typical_suction_psig: "110–130 (40–50°F evap temp)"
+      typical_discharge_psig: "300–400 (100–120°F cond temp)"
+      max_operating_pressure_psig: 600
+    normal_superheat_range_f: "8–15"
+    normal_subcooling_range_f: "8–14"
+    oil_compatibility: "POE (polyolester)"
+    charging_method: "Liquid only (near-azeotrope but fractionation possible)"
+    phase_out: "Kigali Amendment — phasedown by 2025+ (varies by region)"
+    safety_notes:
+      - "Operating pressures ~60% higher than R-22"
+      - "Requires rated components — never use R-22 equipment"
+      - "Non-flammable but high pressure — relief devices critical"
+      - "System must be charged as liquid to avoid fractionation"
+
+  r22:
+    name: "R-22 (Chlorodifluoromethane / HCFC-22)"
+    common_use: "Legacy residential/commercial A/C (phased out for new equipment 2010)"
+    type: "HCFC"
+    safety_group: "A1"
+    gwp: 1810
+    odp: 0.055
+    boiling_point_f: -41.4
+    operating_pressures:
+      typical_suction_psig: "58–85 (35–50°F evap temp)"
+      typical_discharge_psig: "200–275 (95–115°F cond temp)"
+    normal_superheat_range_f: "8–14"
+    normal_subcooling_range_f: "10–18"
+    oil_compatibility: "Mineral oil or AB (alkylbenzene)"
+    phase_out: "Production and import banned in US as of January 1, 2020"
+    safety_notes:
+      - "Only reclaimed/recycled R-22 available for servicing"
+      - "Cannot be vented — EPA Section 608 requires recovery"
+      - "Mixing with R-410A is prohibited and dangerous"
+
+  r513a:
+    name: "R-513A (56% R-1234yf, 44% R-134a)"
+    common_use: "Drop-in replacement for R-134a in centrifugal chillers"
+    type: "HFO/HFC blend (azeotrope)"
+    safety_group: "A1"
+    gwp: 631
+    odp: 0
+    boiling_point_f: -18.0
+    operating_pressures:
+      typical_evaporator_psig: "20–35 (similar to R-134a)"
+      typical_condenser_psig: "110–140 (similar to R-134a)"
+    oil_compatibility: "POE (polyolester)"
+    notes: "Lower GWP alternative to R-134a with similar performance"
+
+  r1234ze_e:
+    name: "R-1234ze(E) (trans-1,3,3,3-Tetrafluoropropene)"
+    common_use: "Low-GWP centrifugal chillers (new installations)"
+    type: "HFO"
+    safety_group: "A2L (mildly flammable)"
+    gwp: 7
+    odp: 0
+    boiling_point_f: -2.4
+    operating_pressures:
+      typical_evaporator_psig: "15–25 (slightly lower than R-134a)"
+      typical_condenser_psig: "85–115 (lower than R-134a)"
+    safety_notes:
+      - "Mildly flammable — A2L classification"
+      - "Requires refrigerant detection per ASHRAE 15"
+      - "Lower volumetric capacity than R-134a — larger compressors needed"
+
+diagnostic_reference:
+  superheat:
+    definition: "Temperature of refrigerant vapor above its saturation temperature"
+    measurement: "Suction line temperature minus suction saturation temperature"
+    normal_range_f: "8–15 (varies by system type and metering device)"
+    high_superheat_causes:
+      - "Low refrigerant charge"
+      - "Restricted metering device (TXV, EXV)"
+      - "Insufficient airflow across evaporator"
+      - "Liquid line restriction"
+    low_superheat_causes:
+      - "Overcharge of refrigerant"
+      - "TXV stuck open or oversized"
+      - "Excessive evaporator airflow"
+      - "Compressor valve failure (poor compression)"
+    safety: "Very low superheat risks liquid slugging the compressor"
+
+  subcooling:
+    definition: "Temperature of liquid refrigerant below its saturation temperature"
+    measurement: "Liquid saturation temperature minus liquid line temperature"
+    normal_range_f: "8–14 (varies by system)"
+    high_subcooling_causes:
+      - "Overcharge of refrigerant"
+      - "Condenser oversized for load"
+      - "Restriction after condenser (liquid line drier, solenoid)"
+    low_subcooling_causes:
+      - "Low refrigerant charge"
+      - "Insufficient condenser airflow or waterflow"
+      - "Non-condensables in system"
+    safety: "Low subcooling can cause flash gas at metering device"
+
+  approach_temperature:
+    definition: "Difference between leaving condenser water temp and outdoor wet bulb"
+    typical_cooling_tower_approach_f: "7–10"
+    high_approach_causes:
+      - "Cooling tower fouling or scale"
+      - "Inadequate tower airflow (fan issue)"
+      - "Excessive heat load"
+      - "Tower undersized for conditions"
+
+  condenser_range:
+    definition: "Difference between entering and leaving condenser water temperature"
+    typical_range_f: "8–12"
+    design_standard: "10°F is typical design condition"

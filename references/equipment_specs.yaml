@@ -1,0 +1,224 @@
+# ─────────────────────────────────────────────────────────────
+# Equipment Technical Specifications — Public Reference Data
+#
+# Sources: Published product catalogs, datasheets, AHRI
+# certified data, manufacturer installation guides (public).
+# ─────────────────────────────────────────────────────────────
+
+chillers:
+  york_yk:
+    manufacturer: "Johnson Controls / YORK"
+    model_series: "YK"
+    type: "Centrifugal chiller"
+    compressor: "Single-stage centrifugal with variable geometry diffuser"
+    capacity_range_tons: "250–3,000"
+    refrigerant: "R-134a"
+    typical_full_load_kw_per_ton: "0.50–0.60"
+    typical_iplv_kw_per_ton: "0.30–0.45"
+    condenser:
+      type: "Shell and tube"
+      water_flow_gpm_per_ton: "3.0 (standard)"
+      design_ewt_f: 85
+      design_lwt_f: 95
+      max_working_pressure_psig: 150
+      fouling_factor: "0.00025 hr·ft²·°F/Btu (standard)"
+    evaporator:
+      type: "Shell and tube"
+      water_flow_gpm_per_ton: "2.4 (standard)"
+      design_lwt_f: 44
+      design_ewt_f: 54
+      min_lwt_f: 36
+      max_working_pressure_psig: 150
+    oil_system:
+      type: "Forced lubrication"
+      oil_type: "POE (polyolester)"
+      oil_charge_gallons: "Model dependent (check nameplate)"
+      oil_pressure_differential_psig: "15–25 typical"
+      oil_sump_heater: "Required — must energize 12h before startup"
+    safety_limits:
+      high_head_pressure_cutout_psig: 165
+      low_suction_pressure_cutout_psig: 15
+      high_motor_temperature_f: 250
+      high_oil_temperature_f: 180
+      low_oil_pressure_differential_psig: 8
+    maintenance_schedule:
+      daily:
+        - "Record operating log (temps, pressures, amps, oil level)"
+      weekly:
+        - "Check oil level and color"
+        - "Verify condenser water flow and temperature"
+        - "Check for unusual vibration or noise"
+      monthly:
+        - "Inspect starter/VFD for proper operation"
+        - "Check refrigerant leak detection system"
+        - "Verify safety controls are functional"
+      quarterly:
+        - "Perform oil analysis (acid number, moisture, metals)"
+        - "Inspect and clean condenser tubes if approach temp > 2°F above design"
+        - "Check purge unit operation (if applicable)"
+      annually:
+        - "Eddy current test on condenser and evaporator tubes"
+        - "Calibrate all sensors and safety controls"
+        - "Perform refrigerant analysis"
+        - "Megger test motor windings (>100 MΩ at 500V DC)"
+        - "Inspect and clean oil filter"
+        - "Verify relief valve operation"
+
+  york_yvaa:
+    manufacturer: "Johnson Controls / YORK"
+    model_series: "YVAA"
+    type: "Air-cooled variable-speed screw chiller"
+    compressor: "Variable-speed twin-screw with variable volume ratio"
+    capacity_range_tons: "150–500"
+    refrigerant: "R-134a"
+    typical_full_load_kw_per_ton: "1.10–1.25"
+    typical_iplv_kw_per_ton: "0.60–0.80"
+    features:
+      - "Variable-speed compressor with magnetic bearing option"
+      - "Integrated free-cooling economizer available"
+      - "Low sound option available"
+    evaporator:
+      type: "Shell and tube"
+      design_lwt_f: 44
+      min_lwt_f: 20
+    maintenance_schedule:
+      quarterly:
+        - "Check compressor oil level and condition"
+        - "Inspect condenser coils — clean if dirty"
+        - "Verify fan operation and belt tension (if applicable)"
+        - "Check refrigerant charge (sight glass, superheat, subcooling)"
+      semi_annually:
+        - "Inspect electrical connections and tighten"
+        - "Check starter/VFD operation"
+        - "Verify safety controls"
+      annually:
+        - "Perform compressor oil analysis"
+        - "Leak test entire system"
+        - "Calibrate sensors and controls"
+        - "Clean evaporator tubes"
+        - "Inspect and test relief valves"
+
+vfds:
+  general_specifications:
+    description: "Variable Frequency Drives for HVAC fan and pump motors"
+    input_voltage_ranges:
+      - "208–240V 3-phase"
+      - "380–480V 3-phase"
+      - "575–600V 3-phase"
+    typical_efficiency_percent: "95–98"
+    ambient_temperature_rating:
+      standard_f: "32–104 (0–40°C)"
+      derated_above_f: 104
+      derating_per_degree_c: "2% per °C above 40°C"
+    installation_requirements:
+      - "Minimum clearances: 4 inches sides, 6 inches top and bottom for airflow"
+      - "Mount vertically on non-combustible surface"
+      - "Input line reactor or DC choke recommended if >50ft from transformer"
+      - "Output reactor required if cable length >100ft to motor"
+    safety_warnings:
+      - "DC bus capacitors store LETHAL voltage for 5+ minutes after power-off"
+      - "Always verify zero energy with rated meter before opening"
+      - "Arc flash PPE required per NFPA 70E when energized"
+      - "Ground fault protection may not work properly with VFD output"
+    common_faults:
+      overcurrent:
+        causes:
+          - "Motor overloaded or mechanically bound"
+          - "Short circuit in motor windings or cable"
+          - "VFD thermal derating due to high ambient"
+          - "Failing IGBT output module"
+          - "Incorrect motor parameters programmed"
+        diagnostics:
+          - "Check motor nameplate amps vs VFD current reading"
+          - "Megger test motor windings (disconnect VFD first!)"
+          - "Check VFD heat sink temperature"
+          - "Measure output voltage balance on all 3 phases"
+          - "Review VFD fault log for pattern (time of day, load level)"
+      overvoltage:
+        causes:
+          - "Motor regenerative energy (fast deceleration)"
+          - "Input voltage sag recovery (voltage spike)"
+          - "Incorrect decel ramp time"
+        diagnostics:
+          - "Increase deceleration time"
+          - "Add dynamic braking resistor if needed"
+          - "Check input power quality"
+      undervoltage:
+        causes:
+          - "Power supply voltage low"
+          - "Loose connections at input terminals"
+          - "Transformer tap set incorrectly"
+
+controls:
+  metasys:
+    manufacturer: "Johnson Controls"
+    system: "Metasys Building Automation System"
+    architecture:
+      supervisory: "NAE (Network Automation Engine) — NAE45, NAE55"
+      field_controllers: "FEC (Field Equipment Controller) — FEC26xx series"
+      sensors: "TS (Temperature Sensor), HS (Humidity Sensor)"
+      protocols:
+        - "BACnet/IP (supervisory network)"
+        - "BACnet MS/TP (field bus)"
+        - "N2 (legacy protocol)"
+    bacnet_mstp:
+      baud_rates: "9600, 19200, 38400, 76800"
+      max_devices_per_trunk: 32
+      max_trunk_length_ft:
+        at_9600_baud: 4000
+        at_76800_baud: 2000
+      wiring: "Shielded twisted pair (STP), daisy-chain topology, no stubs"
+      termination: "120 ohm resistor at each end of trunk"
+      common_issues:
+        - "CRC errors indicate noise, bad wiring, or missing termination"
+        - "Token pass failures indicate a device is jamming the bus"
+        - "Address conflicts cause intermittent communication"
+        - "Stubs (T-taps) cause signal reflections — use daisy-chain only"
+    troubleshooting_mstp:
+      - "Check for duplicate MAC addresses on the trunk"
+      - "Verify trunk termination (120 ohm) at both ends"
+      - "Measure bus voltage: idle should be 0V differential, active ±1.5V to ±5V"
+      - "Isolate by disconnecting half the trunk to find the problem section"
+      - "Check shield grounding — ground at one end only"
+      - "Replace any controller with high CRC error count"
+      - "Verify baud rate matches on ALL devices on the trunk"
+
+rooftop_units:
+  general:
+    description: "Packaged rooftop units for commercial HVAC"
+    common_refrigerants:
+      - "R-410A (current standard)"
+      - "R-22 (legacy, phased out)"
+      - "R-454B (emerging low-GWP replacement)"
+    diagnostic_procedures:
+      low_cooling_capacity:
+        checks:
+          - "Measure suction and discharge pressures"
+          - "Calculate superheat and subcooling"
+          - "Check airflow across evaporator coil"
+          - "Inspect air filter — replace if dirty"
+          - "Check for refrigerant leak (electronic detector, UV dye)"
+          - "Verify compressor amp draw vs nameplate"
+          - "Check condenser coil — clean if dirty"
+          - "Verify condenser fan operation"
+        r410a_normal_values:
+          suction_pressure_psig: "118–128 at 40°F evap"
+          discharge_pressure_psig: "300–375 at 95–110°F ambient"
+          superheat_f: "8–15"
+          subcooling_f: "8–14"
+      freezestat_trip:
+        description: "Safety device that shuts down AHU if mixed air drops below setpoint (typically 38°F)"
+        common_causes:
+          - "Outside air damper stuck open or failed actuator"
+          - "Heating coil not receiving hot water or steam"
+          - "Hot water pump failure"
+          - "Control valve stuck closed or actuator failed"
+          - "Inadequate heating coil capacity for outdoor conditions"
+          - "Freezestat sensor location issue (reading colder than actual)"
+        diagnostic_steps:
+          - "Check hot water/steam supply temperature and pressure"
+          - "Verify hot water pump is running (check amps, feel pipes)"
+          - "Command heating valve to 100% open and verify coil gets hot"
+          - "Check OA damper position — should be at minimum during preheat"
+          - "Verify BAS sequence: preheat should engage before OA damper opens"
+          - "Check freezestat setpoint and sensor placement"
