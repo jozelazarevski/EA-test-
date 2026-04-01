@@ -1,0 +1,581 @@
+{% extends "base.html" %}
+{% block title %}Validate Golden Records — HVAC EA Testing{% endblock %}
+
+{% block extra_css %}
+<style>
+    .reviewer-bar {
+        background: var(--bg-card);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 16px 20px;
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        margin-bottom: 20px;
+        flex-wrap: wrap;
+    }
+    .reviewer-bar label { margin-bottom: 0; font-weight: 600; color: var(--text-bright); }
+    .reviewer-bar input { width: 240px; }
+    .reviewer-bar .past-reviewers { font-size: 12px; color: var(--text-dim); }
+    .reviewer-bar .past-reviewers span {
+        cursor: pointer;
+        color: var(--accent);
+        margin-left: 4px;
+    }
+
+    .progress-summary {
+        display: flex;
+        gap: 24px;
+        align-items: center;
+        margin-bottom: 20px;
+    }
+    .progress-summary .progress-bar { flex: 1; height: 12px; }
+    .progress-stat { text-align: center; min-width: 70px; }
+    .progress-stat .num { font-size: 22px; font-weight: 700; }
+    .progress-stat .lbl { font-size: 11px; color: var(--text-dim); }
+
+    .record-card {
+        background: var(--bg-card);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        margin-bottom: 16px;
+        overflow: hidden;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+    }
+    .record-card.status-approved { border-left: 4px solid var(--green); }
+    .record-card.status-rejected { border-left: 4px solid var(--red); }
+    .record-card.status-modified { border-left: 4px solid var(--yellow); }
+    .record-card.status-pending { border-left: 4px solid var(--border); }
+
+    .record-header {
+        padding: 16px 20px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        cursor: pointer;
+        user-select: none;
+    }
+    .record-header:hover { background: var(--bg-card-hover); }
+    .record-toggle { font-size: 12px; color: var(--text-dim); transition: transform 0.2s; }
+    .record-card.open .record-toggle { transform: rotate(90deg); }
+    .record-title { font-weight: 600; font-size: 15px; color: var(--text-bright); flex: 1; }
+    .record-type-tag {
+        font-size: 11px;
+        padding: 2px 8px;
+        border-radius: 4px;
+        font-weight: 600;
+    }
+    .status-badge {
+        font-size: 11px;
+        padding: 3px 10px;
+        border-radius: 10px;
+        font-weight: 700;
+        text-transform: uppercase;
+    }
+    .status-badge.approved { background: var(--green-bg); color: var(--green); }
+    .status-badge.rejected { background: var(--red-bg); color: var(--red); }
+    .status-badge.modified { background: var(--yellow-bg); color: var(--yellow); }
+    .status-badge.pending { background: rgba(148,163,184,0.1); color: var(--text-dim); }
+
+    .record-body { display: none; padding: 0 20px 20px; }
+    .record-card.open .record-body { display: block; }
+
+    .section-group {
+        margin-bottom: 16px;
+    }
+    .section-label {
+        font-size: 12px;
+        font-weight: 700;
+        text-transform: uppercase;
+        color: var(--text-dim);
+        margin-bottom: 8px;
+        letter-spacing: 0.5px;
+    }
+
+    .element-list { list-style: none; }
+    .element-item {
+        display: flex;
+        align-items: flex-start;
+        gap: 8px;
+        padding: 8px 12px;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        margin-bottom: 4px;
+        font-size: 13px;
+        line-height: 1.5;
+        transition: background 0.15s;
+    }
+    .element-item:hover { background: var(--bg-card-hover); }
+
+    .element-vote {
+        display: flex;
+        gap: 2px;
+        flex-shrink: 0;
+        margin-top: 1px;
+    }
+    .vote-btn {
+        width: 24px;
+        height: 24px;
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        background: transparent;
+        cursor: pointer;
+        font-size: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.15s;
+        color: var(--text-dim);
+    }
+    .vote-btn:hover { background: var(--bg-card-hover); }
+    .vote-btn.vote-ok.active { background: var(--green-bg); color: var(--green); border-color: var(--green); }
+    .vote-btn.vote-no.active { background: var(--red-bg); color: var(--red); border-color: var(--red); }
+    .vote-btn.vote-edit.active { background: var(--yellow-bg); color: var(--yellow); border-color: var(--yellow); }
+
+    .element-text { flex: 1; }
+    .element-note {
+        width: 100%;
+        margin-top: 6px;
+        display: none;
+        font-size: 12px;
+    }
+    .element-item.has-note .element-note { display: block; }
+    .element-note textarea {
+        width: 100%;
+        min-height: 32px;
+        font-size: 12px;
+        padding: 4px 8px;
+        resize: vertical;
+    }
+
+    .values-table { width: 100%; border-collapse: collapse; font-size: 13px; margin-bottom: 4px; }
+    .values-table th { text-align: left; padding: 6px 10px; color: var(--text-dim); font-size: 11px; text-transform: uppercase; }
+    .values-table td { padding: 6px 10px; border-bottom: 1px solid var(--border); }
+    .values-table .val-key { font-weight: 500; color: var(--text-bright); }
+
+    .review-actions {
+        border-top: 1px solid var(--border);
+        padding-top: 16px;
+        margin-top: 16px;
+        display: flex;
+        gap: 8px;
+        align-items: flex-start;
+        flex-wrap: wrap;
+    }
+    .review-comment {
+        flex: 1;
+        min-width: 250px;
+    }
+    .review-comment textarea {
+        width: 100%;
+        min-height: 48px;
+        resize: vertical;
+    }
+    .review-buttons { display: flex; gap: 6px; flex-shrink: 0; padding-top: 18px; }
+
+    .prev-review {
+        background: rgba(148,163,184,0.06);
+        border-radius: 6px;
+        padding: 10px 14px;
+        margin-bottom: 12px;
+        font-size: 12px;
+    }
+    .prev-review .meta { color: var(--text-dim); margin-bottom: 4px; }
+
+    .filter-bar {
+        display: flex;
+        gap: 6px;
+        margin-bottom: 16px;
+        flex-wrap: wrap;
+    }
+    .filter-btn {
+        padding: 4px 12px;
+        border-radius: 6px;
+        font-size: 13px;
+        border: 1px solid var(--border);
+        background: var(--bg-card);
+        color: var(--text);
+        cursor: pointer;
+        transition: all 0.15s;
+    }
+    .filter-btn:hover { border-color: var(--accent); }
+    .filter-btn.active { background: var(--accent); color: white; border-color: var(--accent); }
+
+    .export-bar { display: flex; gap: 8px; margin-left: auto; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>Golden Record Validation</h1>
+    <p>Review and validate expected answers with your HVAC technicians. Each element can be individually approved, rejected, or flagged for revision.</p>
+</div>
+
+<!-- Reviewer identity -->
+<div class="reviewer-bar">
+    <label>Reviewer:</label>
+    <input type="text" id="reviewer-name" placeholder="Enter your name" value="{{ reviewer }}">
+    {% if reviewers %}
+    <div class="past-reviewers">
+        Previous:
+        {% for r in reviewers %}
+        <span onclick="document.getElementById('reviewer-name').value='{{ r }}'">{{ r }}</span>{{ ", " if not loop.last }}
+        {% endfor %}
+    </div>
+    {% endif %}
+    <div class="export-bar">
+        <a href="/api/validate/standalone" class="btn btn-sm btn-primary" download="golden_record_review.html">Download Shareable HTML</a>
+        <a href="/api/validate/export" target="_blank" class="btn btn-sm btn-outline">Export JSON</a>
+        <button class="btn btn-sm btn-danger" onclick="resetAll()">Reset All</button>
+    </div>
+</div>
+
+<!-- Progress -->
+<div class="card">
+    <div class="progress-summary">
+        <div class="progress-stat">
+            <div class="num">{{ stats.total }}</div>
+            <div class="lbl">Total</div>
+        </div>
+        <div class="progress-stat">
+            <div class="num" style="color:var(--green)">{{ stats.approved }}</div>
+            <div class="lbl">Approved</div>
+        </div>
+        <div class="progress-stat">
+            <div class="num" style="color:var(--yellow)">{{ stats.modified }}</div>
+            <div class="lbl">Modified</div>
+        </div>
+        <div class="progress-stat">
+            <div class="num" style="color:var(--red)">{{ stats.rejected }}</div>
+            <div class="lbl">Rejected</div>
+        </div>
+        <div class="progress-stat">
+            <div class="num" style="color:var(--text-dim)">{{ stats.pending }}</div>
+            <div class="lbl">Pending</div>
+        </div>
+        <div style="flex:1;min-width:200px;">
+            {% set reviewed = stats.approved + stats.modified + stats.rejected %}
+            {% set pct = (reviewed / stats.total * 100) if stats.total > 0 else 0 %}
+            <div style="font-size:12px;color:var(--text-dim);margin-bottom:4px;">{{ pct|int }}% reviewed</div>
+            <div class="progress-bar" style="height:10px;">
+                <div class="fill" style="width:{{ pct }}%;background:var(--green);"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Filters -->
+<div class="filter-bar">
+    <button class="filter-btn active" onclick="filterRecords('all', this)">All ({{ stats.total }})</button>
+    <button class="filter-btn" onclick="filterRecords('pending', this)">Pending ({{ stats.pending }})</button>
+    <button class="filter-btn" onclick="filterRecords('approved', this)">Approved ({{ stats.approved }})</button>
+    <button class="filter-btn" onclick="filterRecords('modified', this)">Modified ({{ stats.modified }})</button>
+    <button class="filter-btn" onclick="filterRecords('rejected', this)">Rejected ({{ stats.rejected }})</button>
+    <button class="filter-btn" onclick="filterRecords('scenario', this)">Scenarios</button>
+    <button class="filter-btn" onclick="filterRecords('test_case', this)">Test Cases</button>
+</div>
+
+<!-- Records -->
+{% for rec in records %}
+<div class="record-card status-{{ rec.status }}" data-status="{{ rec.status }}" data-type="{{ rec.type }}"
+     data-id="{{ rec.id }}" data-rtype="{{ rec.type }}">
+    <div class="record-header" onclick="toggleRecord(this.parentElement)">
+        <span class="record-toggle">&#9654;</span>
+        <span class="record-title">
+            {{ rec.data.get('title', rec.data.get('question', rec.id)) }}
+        </span>
+        <span class="record-type-tag badge-blue">{{ rec.type_label }}</span>
+        <span class="tag">{{ rec.id }}</span>
+        <span class="status-badge {{ rec.status }}">{{ rec.status }}</span>
+    </div>
+    <div class="record-body">
+
+        {% if rec.review %}
+        <div class="prev-review">
+            <div class="meta">
+                Reviewed by <strong>{{ rec.review.reviewer }}</strong> on {{ rec.review.reviewed_at[:16] }}
+                — <span class="status-badge {{ rec.review.status }}">{{ rec.review.status }}</span>
+            </div>
+            {% if rec.review.comments %}
+            <div style="margin-top:4px;">{{ rec.review.comments }}</div>
+            {% endif %}
+        </div>
+        {% endif %}
+
+        {# ── Required Elements (scenarios) ─────────────────────── #}
+        {% if rec.data.get('required_elements') %}
+        {% for section_key, section_items in rec.data.required_elements.items() %}
+        <div class="section-group">
+            <div class="section-label">{{ section_key|replace('_', ' ')|title }}</div>
+            <ul class="element-list">
+                {% for item in section_items %}
+                <li class="element-item" data-element="{{ section_key }}:{{ loop.index0 }}">
+                    <div class="element-vote">
+                        <button class="vote-btn vote-ok" title="Correct" onclick="voteElement(this, 'ok')">&#10003;</button>
+                        <button class="vote-btn vote-no" title="Incorrect" onclick="voteElement(this, 'no')">&#10007;</button>
+                        <button class="vote-btn vote-edit" title="Needs edit" onclick="voteElement(this, 'edit')">&#9998;</button>
+                    </div>
+                    <div class="element-text">{{ item }}</div>
+                    <div class="element-note">
+                        <textarea placeholder="Suggest correction or add note..."></textarea>
+                    </div>
+                </li>
+                {% endfor %}
+            </ul>
+        </div>
+        {% endfor %}
+        {% endif %}
+
+        {# ── Expected Facts (test cases) ───────────────────────── #}
+        {% if rec.data.get('expected_facts') %}
+        <div class="section-group">
+            <div class="section-label">Expected Facts</div>
+            <ul class="element-list">
+                {% for item in rec.data.expected_facts %}
+                <li class="element-item" data-element="expected_facts:{{ loop.index0 }}">
+                    <div class="element-vote">
+                        <button class="vote-btn vote-ok" title="Correct" onclick="voteElement(this, 'ok')">&#10003;</button>
+                        <button class="vote-btn vote-no" title="Incorrect" onclick="voteElement(this, 'no')">&#10007;</button>
+                        <button class="vote-btn vote-edit" title="Needs edit" onclick="voteElement(this, 'edit')">&#9998;</button>
+                    </div>
+                    <div class="element-text">{{ item }}</div>
+                    <div class="element-note">
+                        <textarea placeholder="Suggest correction or add note..."></textarea>
+                    </div>
+                </li>
+                {% endfor %}
+            </ul>
+        </div>
+        {% endif %}
+
+        {# ── Safety Warnings ───────────────────────────────────── #}
+        {% set safety = rec.data.get('safety_warnings', rec.data.get('safety_notes', [])) %}
+        {% if safety %}
+        <div class="section-group">
+            <div class="section-label" style="color:var(--red);">Safety Warnings</div>
+            <ul class="element-list">
+                {% for item in safety %}
+                <li class="element-item" data-element="safety:{{ loop.index0 }}" style="border-color: rgba(220,38,38,0.2);">
+                    <div class="element-vote">
+                        <button class="vote-btn vote-ok" title="Correct" onclick="voteElement(this, 'ok')">&#10003;</button>
+                        <button class="vote-btn vote-no" title="Incorrect" onclick="voteElement(this, 'no')">&#10007;</button>
+                        <button class="vote-btn vote-edit" title="Needs edit" onclick="voteElement(this, 'edit')">&#9998;</button>
+                    </div>
+                    <div class="element-text" style="color:var(--red);">{{ item }}</div>
+                    <div class="element-note">
+                        <textarea placeholder="Suggest correction or add note..."></textarea>
+                    </div>
+                </li>
+                {% endfor %}
+            </ul>
+        </div>
+        {% endif %}
+
+        {# ── Technical Values ──────────────────────────────────── #}
+        {% set values = rec.data.get('technical_values', rec.data.get('expected_values', {})) %}
+        {% if values %}
+        <div class="section-group">
+            <div class="section-label">Technical Values</div>
+            <table class="values-table">
+                <thead><tr><th></th><th>Parameter</th><th>Value</th><th>Note</th></tr></thead>
+                <tbody>
+                    {% for key, val in values.items() %}
+                    <tr data-element="values:{{ key }}">
+                        <td>
+                            <div class="element-vote" style="flex-direction:row;">
+                                <button class="vote-btn vote-ok" title="Correct" onclick="voteElement(this, 'ok')" style="width:20px;height:20px;font-size:10px;">&#10003;</button>
+                                <button class="vote-btn vote-no" title="Incorrect" onclick="voteElement(this, 'no')" style="width:20px;height:20px;font-size:10px;">&#10007;</button>
+                            </div>
+                        </td>
+                        <td class="val-key">{{ key|replace('_', ' ')|title }}</td>
+                        <td><code>{{ val }}</code></td>
+                        <td><input type="text" class="val-note" placeholder="Correct value..." style="font-size:12px;padding:2px 6px;width:140px;"></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endif %}
+
+        {# ── Forbidden Content ─────────────────────────────────── #}
+        {% if rec.data.get('forbidden_content') %}
+        <div class="section-group">
+            <div class="section-label" style="color:var(--orange);">Forbidden Content</div>
+            <ul class="element-list">
+                {% for item in rec.data.forbidden_content %}
+                <li class="element-item" data-element="forbidden:{{ loop.index0 }}" style="border-color: rgba(234,88,12,0.2);">
+                    <div class="element-vote">
+                        <button class="vote-btn vote-ok" title="Agree" onclick="voteElement(this, 'ok')">&#10003;</button>
+                        <button class="vote-btn vote-no" title="Disagree" onclick="voteElement(this, 'no')">&#10007;</button>
+                        <button class="vote-btn vote-edit" title="Needs edit" onclick="voteElement(this, 'edit')">&#9998;</button>
+                    </div>
+                    <div class="element-text">{{ item }}</div>
+                    <div class="element-note">
+                        <textarea placeholder="Suggest correction or add note..."></textarea>
+                    </div>
+                </li>
+                {% endfor %}
+            </ul>
+        </div>
+        {% endif %}
+
+        {# ── References ────────────────────────────────────────── #}
+        {% if rec.data.get('references') %}
+        <div class="section-group">
+            <div class="section-label">References</div>
+            <ul style="margin-left:16px;font-size:13px;color:var(--text-dim);">
+                {% for ref in rec.data.references %}
+                <li style="margin-bottom:2px;">{{ ref }}</li>
+                {% endfor %}
+            </ul>
+        </div>
+        {% endif %}
+
+        {# ── Review Actions ────────────────────────────────────── #}
+        <div class="review-actions">
+            <div class="review-comment">
+                <label>Overall Comments</label>
+                <textarea id="comment-{{ rec.id }}" placeholder="Add overall comments, missing elements, or corrections...">{{ rec.review.get('comments', '') if rec.review else '' }}</textarea>
+            </div>
+            <div class="review-buttons">
+                <button class="btn btn-success" onclick="submitReview('{{ rec.id }}', '{{ rec.type }}', 'approved')">
+                    &#10003; Approve
+                </button>
+                <button class="btn btn-outline" style="border-color:var(--yellow);color:var(--yellow);" onclick="submitReview('{{ rec.id }}', '{{ rec.type }}', 'modified')">
+                    &#9998; Needs Changes
+                </button>
+                <button class="btn btn-danger" onclick="submitReview('{{ rec.id }}', '{{ rec.type }}', 'rejected')">
+                    &#10007; Reject
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endfor %}
+
+{% if not records %}
+<div class="card">
+    <div class="empty-state">
+        <div class="icon">&#128203;</div>
+        <p>No golden records found. Add expected answers to <code>references/expected_answers.yaml</code>.</p>
+    </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function toggleRecord(card) {
+    card.classList.toggle('open');
+}
+
+function voteElement(btn, vote) {
+    const item = btn.closest('.element-item, tr');
+    // Clear all active in this group
+    item.querySelectorAll('.vote-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+
+    // Show note field if edit/reject
+    if (vote === 'edit' || vote === 'no') {
+        item.classList.add('has-note');
+    } else {
+        item.classList.remove('has-note');
+    }
+}
+
+function filterRecords(filter, btn) {
+    document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+
+    document.querySelectorAll('.record-card').forEach(card => {
+        const status = card.dataset.status;
+        const type = card.dataset.type;
+        if (filter === 'all') {
+            card.style.display = '';
+        } else if (filter === 'scenario' || filter === 'test_case') {
+            card.style.display = type === filter ? '' : 'none';
+        } else {
+            card.style.display = status === filter ? '' : 'none';
+        }
+    });
+}
+
+function collectElementReviews(card) {
+    const reviews = {};
+    card.querySelectorAll('.element-item, tr[data-element]').forEach(item => {
+        const key = item.dataset.element;
+        if (!key) return;
+        const activeBtn = item.querySelector('.vote-btn.active');
+        if (!activeBtn) return;
+
+        let vote = 'ok';
+        if (activeBtn.classList.contains('vote-no')) vote = 'rejected';
+        else if (activeBtn.classList.contains('vote-edit')) vote = 'needs_edit';
+
+        const noteEl = item.querySelector('textarea, .val-note');
+        const note = noteEl ? noteEl.value.trim() : '';
+
+        reviews[key] = { vote, note };
+    });
+    return reviews;
+}
+
+function submitReview(recordId, recordType, status) {
+    const reviewer = document.getElementById('reviewer-name').value.trim();
+    if (!reviewer) {
+        showToast('Please enter your name as reviewer', 'warning');
+        document.getElementById('reviewer-name').focus();
+        return;
+    }
+
+    const card = document.querySelector(`.record-card[data-id="${recordId}"]`);
+    const comments = document.getElementById('comment-' + recordId).value.trim();
+    const elementReviews = collectElementReviews(card);
+
+    apiPost('/api/validate/review', {
+        record_id: recordId,
+        record_type: recordType,
+        reviewer: reviewer,
+        status: status,
+        comments: comments,
+        element_reviews: elementReviews,
+    }).then(data => {
+        if (data.error) {
+            showToast(data.error, 'error');
+            return;
+        }
+        // Update card status visually
+        card.className = card.className.replace(/status-\w+/, 'status-' + status);
+        card.dataset.status = status;
+        const badge = card.querySelector('.status-badge');
+        badge.className = 'status-badge ' + status;
+        badge.textContent = status;
+
+        const labels = { approved: 'Approved', rejected: 'Rejected', modified: 'Needs Changes' };
+        showToast(`${recordId}: ${labels[status]}`, status === 'approved' ? 'success' : status === 'rejected' ? 'error' : 'warning');
+
+        // Close this card and open next pending
+        card.classList.remove('open');
+        const next = card.nextElementSibling;
+        if (next && next.classList.contains('record-card') && next.dataset.status === 'pending') {
+            next.classList.add('open');
+            next.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+    });
+}
+
+function resetAll() {
+    if (!confirm('Reset ALL validations? This cannot be undone.')) return;
+    apiPost('/api/validate/reset', {}).then(data => {
+        showToast(data.status, 'success');
+        location.reload();
+    });
+}
+
+// Auto-open first pending record
+document.addEventListener('DOMContentLoaded', () => {
+    const first = document.querySelector('.record-card.status-pending');
+    if (first) first.classList.add('open');
+});
+</script>
+{% endblock %}

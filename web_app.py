@@ -359,6 +359,174 @@ def api_save_settings():
 
 
 # ---------------------------------------------------------------------------
+# Golden Record Validation
+# ---------------------------------------------------------------------------
+
+_VALIDATION_FILE = BASE_DIR / "references" / "validation_state.json"
+
+
+def _load_validations() -> dict:
+    if _VALIDATION_FILE.exists():
+        with open(_VALIDATION_FILE) as f:
+            return json.load(f)
+    return {"reviews": {}, "reviewers": []}
+
+
+def _save_validations(data: dict):
+    _VALIDATION_FILE.parent.mkdir(parents=True, exist_ok=True)
+    with open(_VALIDATION_FILE, "w") as f:
+        json.dump(data, f, indent=2, default=str)
+
+
+def _load_golden_records() -> dict:
+    """Load expected answers YAML and return structured records."""
+    import yaml
+    path = BASE_DIR / "references" / "expected_answers.yaml"
+    if not path.exists():
+        return {"scenarios": {}, "test_cases": {}}
+    with open(path) as f:
+        return yaml.safe_load(f) or {}
+
+
+@app.route("/validate")
+def validate_page():
+    """Golden record validation page for technician review."""
+    records = _load_golden_records()
+    validations = _load_validations()
+    reviewer = request.args.get("reviewer", "")
+
+    # Merge validation state into records for template
+    all_records = []
+    for record_type in ["scenarios", "test_cases"]:
+        items = records.get(record_type, {})
+        for rec_id, rec_data in items.items():
+            review_key = f"{record_type}:{rec_id}"
+            review = validations.get("reviews", {}).get(review_key, {})
+            all_records.append({
+                "id": rec_id,
+                "type": record_type.rstrip("s"),
+                "type_label": "Scenario" if record_type == "scenarios" else "Test Case",
+                "data": rec_data,
+                "review": review,
+                "status": review.get("status", "pending"),
+            })
+
+    # Stats
+    total = len(all_records)
+    approved = sum(1 for r in all_records if r["status"] == "approved")
+    rejected = sum(1 for r in all_records if r["status"] == "rejected")
+    modified = sum(1 for r in all_records if r["status"] == "modified")
+    pending = total - approved - rejected - modified
+
+    reviewers = validations.get("reviewers", [])
+
+    return render_template(
+        "validate.html",
+        records=all_records,
+        reviewer=reviewer,
+        reviewers=reviewers,
+        stats={"total": total, "approved": approved, "rejected": rejected,
+               "modified": modified, "pending": pending},
+    )
+
+
+@app.route("/api/validate/review", methods=["POST"])
+def api_submit_review():
+    """Submit a review for a golden record element."""
+    data = request.json or {}
+    record_id = data.get("record_id")
+    record_type = data.get("record_type")
+    reviewer = data.get("reviewer", "").strip()
+    status = data.get("status")  # approved, rejected, modified
+    comments = data.get("comments", "")
+    element_reviews = data.get("element_reviews", {})
+
+    if not record_id or not status or not reviewer:
+        return jsonify({"error": "record_id, status, and reviewer are required"}), 400
+    if status not in ("approved", "rejected", "modified"):
+        return jsonify({"error": "status must be approved, rejected, or modified"}), 400
+
+    validations = _load_validations()
+    # Normalize key to plural form (matches YAML structure)
+    type_key = record_type if record_type.endswith("s") else record_type + "s"
+    review_key = f"{type_key}:{record_id}"
+
+    validations["reviews"][review_key] = {
+        "status": status,
+        "reviewer": reviewer,
+        "comments": comments,
+        "element_reviews": element_reviews,
+        "reviewed_at": datetime.now().isoformat(),
+    }
+
+    # Track reviewers
+    if reviewer and reviewer not in validations.get("reviewers", []):
+        validations.setdefault("reviewers", []).append(reviewer)
+
+    _save_validations(validations)
+    return jsonify({"status": "ok", "review_key": review_key})
+
+
+@app.route("/api/validate/export")
+def api_export_validations():
+    """Export validation results as JSON."""
+    validations = _load_validations()
+    records = _load_golden_records()
+
+    export = {
+        "exported_at": datetime.now().isoformat(),
+        "summary": {},
+        "records": [],
+    }
+
+    for record_type in ["scenarios", "test_cases"]:
+        items = records.get(record_type, {})
+        for rec_id, rec_data in items.items():
+            review_key = f"{record_type}:{rec_id}"
+            review = validations.get("reviews", {}).get(review_key, {})
+            export["records"].append({
+                "id": rec_id,
+                "type": record_type,
+                "title": rec_data.get("title", rec_data.get("question", rec_id)),
+                "review_status": review.get("status", "pending"),
+                "reviewer": review.get("reviewer", ""),
+                "comments": review.get("comments", ""),
+                "element_reviews": review.get("element_reviews", {}),
+                "reviewed_at": review.get("reviewed_at", ""),
+            })
+
+    statuses = [r["review_status"] for r in export["records"]]
+    export["summary"] = {
+        "total": len(statuses),
+        "approved": statuses.count("approved"),
+        "rejected": statuses.count("rejected"),
+        "modified": statuses.count("modified"),
+        "pending": statuses.count("pending"),
+    }
+
+    return jsonify(export)
+
+
+@app.route("/api/validate/reset", methods=["POST"])
+def api_reset_validations():
+    """Reset all validations."""
+    _save_validations({"reviews": {}, "reviewers": []})
+    return jsonify({"status": "All validations reset"})
+
+
+@app.route("/api/validate/standalone")
+def api_generate_standalone():
+    """Generate a standalone HTML file for email distribution."""
+    from generate_validation_html import generate_standalone_validation_html
+    records = _load_golden_records()
+    html = generate_standalone_validation_html(records)
+    return html, 200, {
+        "Content-Type": "text/html; charset=utf-8",
+        "Content-Disposition": "attachment; filename=golden_record_review.html",
+    }
+
+
+# ---------------------------------------------------------------------------
 # Background test runners
 # ---------------------------------------------------------------------------
 
