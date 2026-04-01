@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% block title %}Reports — HVAC EA Testing{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>Test Reports</h1>
+    <p>Browse all generated test reports</p>
+</div>
+
+<div class="card">
+    {% if reports %}
+    <table>
+        <thead>
+            <tr>
+                <th>Report</th>
+                <th>Type</th>
+                <th>Date</th>
+                <th>Size</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for r in reports %}
+            <tr id="row-{{ loop.index }}">
+                <td>
+                    <a href="/reports/{{ r.filename }}" target="_blank" style="font-weight:500;">{{ r.filename }}</a>
+                </td>
+                <td>
+                    <span class="badge {{ 'badge-purple' if r.type == 'persona' else 'badge-blue' }}">{{ r.type|title }}</span>
+                </td>
+                <td style="color:var(--text-dim);">{{ r.modified }}</td>
+                <td style="color:var(--text-dim);">{{ r.size_kb }} KB</td>
+                <td>
+                    <a href="/reports/{{ r.filename }}" target="_blank" class="btn btn-sm btn-outline">Open</a>
+                    <button class="btn btn-sm btn-danger" onclick="deleteReport('{{ r.filename }}', 'row-{{ loop.index }}')">Delete</button>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <div class="empty-state">
+        <div class="icon">&#128203;</div>
+        <p>No reports found. Run some tests from the <a href="/">Dashboard</a> to generate reports.</p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function deleteReport(filename, rowId) {
+    if (!confirm('Delete report ' + filename + '?')) return;
+    fetch('/api/reports/' + filename, { method: 'DELETE' })
+        .then(r => r.json())
+        .then(data => {
+            if (data.deleted) {
+                document.getElementById(rowId).remove();
+                showToast('Report deleted', 'success');
+            } else {
+                showToast(data.error || 'Failed to delete', 'error');
+            }
+        });
+}
+</script>
+{% endblock %}

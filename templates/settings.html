@@ -1,0 +1,117 @@
+{% extends "base.html" %}
+{% block title %}Settings — HVAC EA Testing{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>Settings</h1>
+    <p>Configure environment variables and application settings</p>
+</div>
+
+<div class="grid-2">
+    <!-- Current Configuration -->
+    <div class="card">
+        <div class="card-header"><h2>Current Configuration</h2></div>
+
+        <table>
+            <tbody>
+                <tr>
+                    <td style="color:var(--text-dim);width:200px;">Target URL</td>
+                    <td><code>{{ target_url }}</code></td>
+                </tr>
+                <tr>
+                    <td style="color:var(--text-dim);">LLM Model</td>
+                    <td><code>{{ llm_model }}</code></td>
+                </tr>
+                <tr>
+                    <td style="color:var(--text-dim);">Anthropic API Key</td>
+                    <td>
+                        <span class="badge {{ 'badge-green' if has_api_key else 'badge-red' }}">
+                            {{ 'Configured' if has_api_key else 'Not Set' }}
+                        </span>
+                    </td>
+                </tr>
+                <tr>
+                    <td style="color:var(--text-dim);">Headless Mode</td>
+                    <td><code>{{ headless }}</code></td>
+                </tr>
+                <tr>
+                    <td style="color:var(--text-dim);">Max Wait (Response)</td>
+                    <td><code>{{ max_wait }}s</code></td>
+                </tr>
+                <tr>
+                    <td style="color:var(--text-dim);">Session Persistence</td>
+                    <td><code>{{ session_persist }}</code></td>
+                </tr>
+            </tbody>
+        </table>
+
+        <div style="margin-top:16px;">
+            <button class="btn btn-outline" onclick="clearSession()">Clear Saved Session</button>
+        </div>
+    </div>
+
+    <!-- Edit .env file -->
+    <div class="card">
+        <div class="card-header">
+            <h2>Environment File (.env)</h2>
+            <button class="btn btn-sm btn-primary" onclick="saveSettings()">Save</button>
+        </div>
+
+        <p style="font-size:12px;color:var(--text-dim);margin-bottom:12px;">
+            Edit your .env file below. Changes require an app restart to take effect.
+        </p>
+
+        <textarea id="env-editor" rows="18" style="font-family:'SF Mono','Fira Code',monospace;font-size:13px;line-height:1.6;">{{ env_content }}</textarea>
+
+        <div style="margin-top:12px;">
+            <button class="btn btn-primary" onclick="saveSettings()">Save Settings</button>
+            <span id="save-status" style="font-size:13px;color:var(--green);margin-left:12px;display:none;">Saved!</span>
+        </div>
+    </div>
+</div>
+
+<!-- Reference Files -->
+<div class="card" style="margin-top:16px;">
+    <div class="card-header"><h2>Reference Knowledge Base</h2></div>
+    <p style="font-size:13px;color:var(--text-dim);margin-bottom:12px;">
+        Authoritative HVAC reference data used for fact-checking EA responses.
+        Source: public standards, JCI documentation (<a href="https://docs.johnsoncontrols.com/bas/" target="_blank">docs.johnsoncontrols.com/bas/</a>).
+    </p>
+    <table>
+        <thead><tr><th>File</th><th>Description</th></tr></thead>
+        <tbody>
+            <tr><td><code>references/hvac_standards.yaml</code></td><td>ASHRAE, EPA, OSHA, NFPA standards and requirements</td></tr>
+            <tr><td><code>references/refrigerant_data.yaml</code></td><td>R-134a, R-410A, R-22, R-513A properties and diagnostics</td></tr>
+            <tr><td><code>references/equipment_specs.yaml</code></td><td>York YK/YVAA chillers, VFDs, Metasys BAS, RTU specs</td></tr>
+            <tr><td><code>references/jci_bas_documentation.yaml</code></td><td>Metasys, Facility Explorer, Verasys, BACnet MS/TP, control sequences</td></tr>
+            <tr><td><code>references/fire_life_safety.yaml</code></td><td>NFPA 72/90A/80, BAS-fire integration, smoke control</td></tr>
+            <tr><td><code>references/expected_answers.yaml</code></td><td>Gold-standard expected answers for scenarios and test cases</td></tr>
+        </tbody>
+    </table>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function saveSettings() {
+    const content = document.getElementById('env-editor').value;
+    apiPost('/api/settings', { env_content: content }).then(data => {
+        if (data.status) {
+            showToast(data.status, 'success');
+            const s = document.getElementById('save-status');
+            s.style.display = 'inline';
+            setTimeout(() => s.style.display = 'none', 3000);
+        } else {
+            showToast(data.error || 'Failed to save', 'error');
+        }
+    });
+}
+
+function clearSession() {
+    if (!confirm('Clear saved browser session? You will need to log in again.')) return;
+    apiPost('/api/session/clear', {}).then(data => {
+        showToast(data.status || data.error, data.status ? 'success' : 'error');
+    });
+}
+</script>
+{% endblock %}
