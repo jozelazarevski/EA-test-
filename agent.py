@@ -2,7 +2,8 @@
 HVAC Testing Agent - Browser automation for Expert Advisor testing.
 
 This agent uses Playwright to interact with https://expertadvisor.jci.com/,
-submit HVAC questions, capture responses, download PDFs, and validate results.
+submit HVAC questions, capture responses, download PDFs, and evaluate results
+using LLM-powered quality assessment.
 """
 
 import asyncio
@@ -27,19 +28,64 @@ from config import (
     SESSION_PERSIST,
     SESSION_DIR,
     SESSION_MAX_AGE_HOURS,
+    LLM_MODEL,
 )
 from hvac_test_cases import TEST_CASES
-from validators import validate_response, validate_pdf
+from validators import validate_pdf
+from llm_evaluator import evaluate_response
 from report_generator import ReportGenerator
 from session_manager import SessionManager
+
+
+# Default persona used when evaluating static test cases (no persona-specific
+# context).  This represents a knowledgeable HVAC professional asking the
+# questions defined in hvac_test_cases.py.
+DEFAULT_PERSONA = {
+    "id": "DEFAULT",
+    "name": "HVAC Professional",
+    "role": "Senior HVAC Technician",
+    "experience_years": 10,
+    "expertise_level": "advanced",
+    "background": (
+        "Experienced HVAC professional with broad knowledge across chiller systems, "
+        "air handling units, building automation, refrigeration, energy efficiency, "
+        "and fire safety. Works with Johnson Controls equipment regularly."
+    ),
+    "communication_style": {
+        "tone": "professional and technical",
+        "vocabulary": "industry-standard HVAC terminology",
+        "typical_phrases": [
+            "What are the common causes of...",
+            "How do I troubleshoot...",
+            "What is the recommended...",
+        ],
+    },
+    "question_domains": [
+        "chiller systems",
+        "air handling units",
+        "controls and BAS",
+        "refrigeration",
+        "energy efficiency",
+        "fire and safety",
+    ],
+    "evaluation_focus": [
+        "Technical accuracy of HVAC information",
+        "Completeness of troubleshooting steps or recommendations",
+        "Appropriate safety warnings where relevant",
+        "Relevance and clarity of the response",
+        "Correct references to standards (ASHRAE, EPA, NFPA, OSHA)",
+    ],
+}
 
 
 class HVACTestingAgent:
     """Automated testing agent for the JCI Expert Advisor HVAC tool."""
 
-    def __init__(self, headless: bool = None, test_ids: list = None, persist_session: bool = None):
+    def __init__(self, headless: bool = None, test_ids: list = None,
+                 persist_session: bool = None, model: str = None):
         self.headless = headless if headless is not None else HEADLESS
         self.persist_session = persist_session if persist_session is not None else SESSION_PERSIST
+        self.model = model or LLM_MODEL
         self.browser = None
         self.context = None
         self.page = None
@@ -489,11 +535,12 @@ class HVACTestingAgent:
                 return None
 
     async def run_test_case(self, test_case: dict) -> dict:
-        """Run a single test case and return results."""
+        """Run a single test case and return LLM-evaluated results."""
         tc_id = test_case["id"]
         category = test_case["category"]
         question = test_case["question"]
-        validation = test_case["validation"]
+        expect_pdf = test_case.get("expect_pdf", False)
+        test_type = test_case.get("test_type")
 
         print(f"\n{'='*60}")
         print(f"[Test {tc_id}] Category: {category}")
@@ -510,52 +557,51 @@ class HVACTestingAgent:
                 "response_time": 0,
                 "pdf_links": [],
                 "pdf_validations": [],
-                "validation_results": {
-                    "text_validation": {"pass": True, "details": "Empty question - edge case test"},
-                    "pdf_validation": {"pass": True, "details": "N/A for empty question"},
-                    "overall_pass": True,
+                "evaluation": {
+                    "overall_score": 7,
+                    "pass": True,
+                    "quality_tier": "proficient",
+                    "dimensions": {},
+                    "reasoning_chain": ["Empty question edge case — app handled gracefully."],
+                    "verdict_explanation": "Empty input test: the application handled the empty question without errors.",
+                    "strengths": ["Graceful handling of empty input"],
+                    "weaknesses": [],
+                    "red_flags": [],
+                    "improvement_suggestions": [],
+                    "summary": "Empty question edge case handled correctly.",
                 },
                 "error": None,
                 "screenshots": [],
             }
-
-            if validation.get("expect_error_handling"):
-                result["validation_results"]["text_validation"]["details"] = (
-                    "Empty question edge case: Verified app handles gracefully"
-                )
-
             return result
 
         # Send the question
         response = await self.send_question(question)
 
-        # Validate the text response
-        text_validation = validate_response(
-            response["response_text"],
-            validation,
+        # LLM evaluation
+        evaluation = evaluate_response(
+            persona=DEFAULT_PERSONA,
+            question=question,
+            response_text=response["response_text"],
+            model=self.model,
+            test_id=tc_id,
         )
 
         # Download and validate PDFs if expected
         pdf_validations = []
-        if validation.get("expect_pdf") and response["pdf_links"]:
+        if expect_pdf and response["pdf_links"]:
             for i, pdf_link in enumerate(response["pdf_links"]):
                 if pdf_link["url"] != "button_trigger" and pdf_link["url"].startswith("http"):
                     filename = f"{tc_id}_doc_{i}.pdf"
                     pdf_path = await self.download_pdf(pdf_link["url"], filename)
                     if pdf_path and pdf_path.exists():
                         pdf_result = validate_pdf(
-                            pdf_path, validation.get("pdf_keywords", [])
+                            pdf_path, test_case.get("pdf_keywords", [])
                         )
                         pdf_validations.append(pdf_result)
 
-        pdf_pass = True
-        if validation.get("expect_pdf"):
-            if response["pdf_links"]:
-                pdf_pass = any(v.get("pass", False) for v in pdf_validations) if pdf_validations else True
-            else:
-                pdf_pass = False
-
-        overall_pass = text_validation["pass"] and pdf_pass
+        score = evaluation.get("overall_score", 0)
+        tier = evaluation.get("quality_tier", "unknown")
 
         result = {
             "test_id": tc_id,
@@ -565,20 +611,14 @@ class HVACTestingAgent:
             "response_time": response["response_time"],
             "pdf_links": response["pdf_links"],
             "pdf_validations": pdf_validations,
-            "validation_results": {
-                "text_validation": text_validation,
-                "pdf_validation": {
-                    "pass": pdf_pass,
-                    "details": pdf_validations if pdf_validations else "No PDFs to validate",
-                },
-                "overall_pass": overall_pass,
-            },
+            "evaluation": evaluation,
             "error": response.get("error"),
             "screenshots": response.get("screenshots", []),
         }
 
-        status = "PASS" if overall_pass else "FAIL"
-        print(f"[Test {tc_id}] Result: {status}")
+        tier_icon = {"exemplary": "★★", "proficient": "★", "developing": "◐",
+                     "unsatisfactory": "▽", "critical_failure": "✖"}.get(tier, "?")
+        print(f"[Test {tc_id}] Score: {score}/10  Tier: {tier} {tier_icon}")
         print(f"[Test {tc_id}] Response time: {response['response_time']}s")
         if response.get("error"):
             print(f"[Test {tc_id}] Error: {response['error']}")

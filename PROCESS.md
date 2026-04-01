@@ -1,6 +1,6 @@
 # HVAC Expert Advisor Testing Process
 
-This document describes the end-to-end testing process for the Johnson Controls Expert Advisor, covering both static and persona-based testing modes.
+This document describes the end-to-end testing process for the Johnson Controls Expert Advisor, covering both test case and persona-based testing modes.
 
 ---
 
@@ -8,23 +8,24 @@ This document describes the end-to-end testing process for the Johnson Controls 
 
 The testing system validates Expert Advisor responses through two complementary approaches:
 
-1. **Static Tests** — Predefined questions with deterministic keyword-based validation (no API key needed)
-2. **Persona Tests** — AI-driven multi-turn conversations with LLM-powered evaluation (requires Anthropic API key)
+1. **Test Cases** — Predefined HVAC questions evaluated by Claude across 6 weighted dimensions
+2. **Persona Tests** — AI-driven multi-turn conversations with persona-specific evaluation
 
-Both modes share the same browser automation layer (Playwright) and session management, but differ in how questions are generated, responses are evaluated, and reports are structured.
+Both modes share the same browser automation layer (Playwright), session management, LLM evaluation engine, and reference-checking system. All tests require an Anthropic API key.
 
 ---
 
-## Static Testing Process
+## Test Case Process
 
 **Entry point:** `python run_agent.py`
 
 ### Step 1: Initialization
 
-- Parse CLI arguments (headless mode, test filters, category filters)
-- Load predefined test cases from `hvac_test_cases.py` (19 tests across 8 HVAC categories)
+- Parse CLI arguments (headless mode, test filters, category filters, model override)
+- Verify `ANTHROPIC_API_KEY` is set
+- Load predefined test cases from `hvac_test_cases.py` (19 tests across 9 categories)
 - Filter tests by ID or category if specified
-- Create the `HVACTestingAgent` instance
+- Create the `HVACTestingAgent` instance with a default "Senior HVAC Technician" evaluation persona
 
 ### Step 2: Browser Setup & Authentication
 
@@ -44,23 +45,27 @@ For each test case, sequentially:
 3. **Capture response** — Extract the response text and any PDF/document links
 4. **Take screenshot** — Save a screenshot of the response
 
-### Step 4: Validation
+### Step 4: LLM Evaluation
 
-Each response is validated against the test case definition:
+Each response is evaluated by Claude using the same 6-dimension scoring model as persona tests:
 
-- **Keyword presence** — `must_contain` keywords must appear in the response
-- **Keyword absence** — `must_not_contain` keywords must not appear
-- **Minimum length** — Response must meet a minimum character count
-- **Off-topic handling** — For edge-case tests, check that the system redirects back to HVAC topics
-- **PDF validation** — If a PDF is expected: download it, extract text with PyPDF2, check for expected keywords and verify page count
-
-Result: binary **PASS** or **FAIL** per test case.
+- Claude receives the question, response, a default HVAC professional persona profile, and reference data from the knowledge base
+- The response is scored on safety (2x), accuracy (1.5x), completeness (1.2x), relevance (1x), clarity (0.8x), and persona fit (0.8x)
+- A weighted average determines the quality tier (Exemplary through Critical Failure)
+- Critical dimension caps apply: safety < 4 caps at Unsatisfactory, accuracy < 4 caps at Developing
+- Reference checking verifies claims against ASHRAE standards, equipment specs, and gold-standard answers
+- PDF validation is performed as a supplementary check when PDFs are expected
 
 ### Step 5: Report Generation
 
-- Compute summary statistics (total, passed, failed, pass rate, average response time)
-- Group results by category
-- Generate an **HTML report** with summary cards, category breakdown table, and detailed per-test results
+- Compute summary statistics (total, average score, tier distribution, pass rate, average response time)
+- Group results by category with per-category average scores
+- Generate an **HTML report** with:
+  - Summary cards (total tests, average score, passed/failed, pass rate, response time)
+  - Quality tier distribution bar
+  - Category breakdown table with average scores
+  - Expandable test cards showing full evaluation: dimension scores, reasoning chains, verdict, strengths/weaknesses, reference comparison
+  - Red flags section
 - Generate a **JSON report** with full machine-readable results
 - Save both to `reports/report_<timestamp>.html` and `.json`
 
@@ -75,7 +80,7 @@ Result: binary **PASS** or **FAIL** per test case.
 - Parse CLI arguments (personas, tier, question count, follow-up count, model override)
 - Load persona definitions from `personas.py` (10 personas across 4 tiers)
 - Filter by persona ID or tier if specified
-- Initialize the browser agent (same setup as static tests)
+- Initialize the browser agent (same setup as test cases)
 
 ### Step 2: Question Generation
 
@@ -94,7 +99,7 @@ For each persona, the LLM generates contextual questions:
 
 For each generated question:
 
-1. **Submit to Expert Advisor** — Same browser automation as static tests
+1. **Submit to Expert Advisor** — Same browser automation as test cases
 2. **Capture response** — Extract response text and any PDF links
 3. **Evaluate response** — LLM scores the response from the persona's perspective (see Step 4)
 4. **Generate follow-up** — LLM creates a contextual follow-up question based on:
@@ -212,7 +217,7 @@ The web UI provides a dashboard for running tests without the CLI:
 
 | Method | Endpoint | Purpose |
 |--------|----------|---------|
-| `POST` | `/api/run/static` | Start a static test run |
+| `POST` | `/api/run/static` | Start a test case run (LLM-evaluated) |
 | `POST` | `/api/run/persona` | Start a persona test run |
 | `GET` | `/api/run/<run_id>/events` | SSE stream for live updates |
 | `GET` | `/api/run/<run_id>/status` | Get current run status |
@@ -232,7 +237,7 @@ The web UI provides a dashboard for running tests without the CLI:
               ┌──────────────┴──────────────┐
               │                             │
      ┌────────▼────────┐          ┌─────────▼─────────┐
-     │  Static Tests   │          │  Persona Tests    │
+     │   Test Cases    │          │  Persona Tests    │
      │  (run_agent.py) │          │(run_persona_tests)│
      └────────┬────────┘          └─────────┬─────────┘
               │                             │
@@ -249,11 +254,14 @@ The web UI provides a dashboard for running tests without the CLI:
      │  └──────────────────────────────────────────┘  │
      └────────┬─────────────────────────────┬────────┘
               │                             │
-     ┌────────▼────────┐          ┌─────────▼─────────┐
-     │ Keyword/PDF     │          │ LLM Evaluation    │
-     │ Validation      │          │ (6 dimensions)    │
-     │ (validators.py) │          │ + Reference Check │
-     └────────┬────────┘          └─────────┬─────────┘
+     ┌────────▼─────────────────────────────▼────────┐
+     │          LLM Evaluation Engine                 │
+     │  ┌──────────────────────────────────────────┐  │
+     │  │  6 Weighted Dimensions + Reference Check │  │
+     │  │  5-Tier Quality Model + Critical Caps    │  │
+     │  │  Reasoning Chains + Fact Verification    │  │
+     │  └──────────────────────────────────────────┘  │
+     └────────┬─────────────────────────────┬────────┘
               │                             │
               │                    ┌────────▼────────┐
               │                    │ Coherence       │
@@ -272,7 +280,8 @@ The web UI provides a dashboard for running tests without the CLI:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `ANTHROPIC_API_KEY` | — | Required for persona tests and LLM evaluation |
+| `ANTHROPIC_API_KEY` | — | Required for all tests |
+| `LLM_MODEL` | `claude-sonnet-4-6` | Claude model for evaluation |
 | `HEADLESS` | `false` | Run browser without visible window |
 | `SLOW_MO` | `500` | Milliseconds between browser actions |
 | `TIMEOUT` | `60000` | Default timeout for page operations (ms) |
