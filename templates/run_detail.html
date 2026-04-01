@@ -1,0 +1,226 @@
+{% extends "base.html" %}
+{% block title %}Run {{ run_id }} — HVAC EA Testing{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>Test Run: {{ run.type|title }}</h1>
+    <p>Run ID: {{ run_id }} | Started: {{ run.started_at }}</p>
+</div>
+
+<!-- Status banner -->
+<div class="card" id="status-card">
+    <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
+        <div>
+            <div style="font-size:13px;color:var(--text-dim);">Status</div>
+            <div style="font-size:20px;font-weight:700;" id="run-status">{{ run.status|title }}</div>
+        </div>
+        <div>
+            <div style="font-size:13px;color:var(--text-dim);">Progress</div>
+            <div style="font-size:20px;font-weight:700;" id="run-progress">{{ run.progress }} / {{ run.total }}</div>
+        </div>
+        <div style="flex:1;min-width:200px;">
+            <div class="progress-bar" style="height:10px;">
+                <div class="fill" id="progress-fill" style="width:{{ (run.progress / run.total * 100) if run.total > 0 else 0 }}%"></div>
+            </div>
+        </div>
+        <div id="report-link" style="display:none;">
+            <a href="" id="report-href" class="btn btn-success" target="_blank">View Report</a>
+        </div>
+    </div>
+</div>
+
+<!-- Stats row -->
+<div class="grid-4" id="stats-row">
+    <div class="card stat">
+        <div class="number" id="stat-total">{{ run.total }}</div>
+        <div class="label">Total</div>
+    </div>
+    <div class="card stat">
+        <div class="number" id="stat-done" style="color:var(--accent)">{{ run.progress }}</div>
+        <div class="label">Completed</div>
+    </div>
+    <div class="card stat">
+        <div class="number" id="stat-pass" style="color:var(--green)">0</div>
+        <div class="label">Passed</div>
+    </div>
+    <div class="card stat">
+        <div class="number" id="stat-fail" style="color:var(--red)">0</div>
+        <div class="label">Failed</div>
+    </div>
+</div>
+
+<!-- Live event log -->
+<div class="card">
+    <div class="card-header">
+        <h2>Live Event Log</h2>
+        <span class="badge badge-blue" id="event-count">0 events</span>
+    </div>
+    <div class="event-log" id="event-log">
+        <div class="event"><span class="event-time">--:--:--</span><span class="event-info">Connecting to event stream...</span></div>
+    </div>
+</div>
+
+<!-- Results table (for static tests) -->
+{% if run.type == 'static' %}
+<div class="card" id="results-card" style="display:none;">
+    <div class="card-header"><h2>Test Results</h2></div>
+    <table>
+        <thead><tr><th>Test ID</th><th>Result</th><th>Time</th></tr></thead>
+        <tbody id="results-body"></tbody>
+    </table>
+</div>
+{% endif %}
+
+<!-- Results table (for persona tests) -->
+{% if run.type == 'persona' %}
+<div class="card" id="results-card" style="display:none;">
+    <div class="card-header"><h2>Evaluation Results</h2></div>
+    <table>
+        <thead><tr><th>Persona</th><th>Score</th><th>Tier</th><th>Type</th></tr></thead>
+        <tbody id="results-body"></tbody>
+    </table>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const runId = "{{ run_id }}";
+const runType = "{{ run.type }}";
+let passCount = 0, failCount = 0, eventCount = 0;
+
+function addEvent(msg, type = 'info') {
+    const log = document.getElementById('event-log');
+    const div = document.createElement('div');
+    div.className = 'event';
+    const now = new Date().toLocaleTimeString();
+    div.innerHTML = `<span class="event-time">${now}</span><span class="event-${type}">${msg}</span>`;
+    log.appendChild(div);
+    log.scrollTop = log.scrollHeight;
+    eventCount++;
+    document.getElementById('event-count').textContent = eventCount + ' events';
+}
+
+function addResult(row) {
+    const card = document.getElementById('results-card');
+    card.style.display = 'block';
+    const body = document.getElementById('results-body');
+    const tr = document.createElement('tr');
+    tr.innerHTML = row;
+    body.appendChild(tr);
+}
+
+function updateProgress(progress, total) {
+    document.getElementById('run-progress').textContent = `${progress} / ${total}`;
+    document.getElementById('stat-done').textContent = progress;
+    const pct = total > 0 ? (progress / total * 100) : 0;
+    document.getElementById('progress-fill').style.width = pct + '%';
+}
+
+function updateStats() {
+    document.getElementById('stat-pass').textContent = passCount;
+    document.getElementById('stat-fail').textContent = failCount;
+}
+
+// SSE connection
+const evtSource = new EventSource(`/api/run/${runId}/events`);
+
+evtSource.onmessage = function(e) {
+    const data = JSON.parse(e.data);
+
+    switch (data.type) {
+        case 'status':
+            document.getElementById('run-status').textContent = data.status.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+            if (data.message) addEvent(data.message, 'info');
+            if (data.progress !== undefined) updateProgress(data.progress, data.total);
+            break;
+
+        case 'test_start':
+            addEvent(`Testing ${data.test_id}: ${data.question}`, 'info');
+            updateProgress(data.progress, data.total);
+            break;
+
+        case 'test_result':
+            const passed = data.passed;
+            addEvent(`${data.test_id}: ${passed ? 'PASS' : 'FAIL'} (${data.response_time.toFixed(1)}s)`, passed ? 'pass' : 'fail');
+            if (passed) passCount++; else failCount++;
+            updateProgress(data.progress, data.total);
+            updateStats();
+            addResult(`
+                <td style="font-weight:500;">${data.test_id}</td>
+                <td><span class="badge ${passed ? 'badge-green' : 'badge-red'}">${data.score}</span></td>
+                <td style="color:var(--text-dim);">${data.response_time.toFixed(1)}s</td>
+            `);
+            break;
+
+        case 'persona_start':
+            addEvent(`Persona ${data.persona_idx}/${data.total_personas}: ${data.persona_name}`, 'info');
+            break;
+
+        case 'question_start':
+            addEvent(`[${data.persona_id}] Q${data.q_idx}/${data.total_q}: ${data.question}`, 'info');
+            break;
+
+        case 'evaluation':
+            const score = data.score;
+            const tier = data.tier;
+            const isPass = score >= 6;
+            if (isPass) passCount++; else failCount++;
+            const fuLabel = data.is_followup ? ' (follow-up)' : '';
+            addEvent(`[${data.persona_id}] Score: ${score}/10 — ${tier}${fuLabel}`, isPass ? 'pass' : 'fail');
+            updateProgress(data.progress, data.total);
+            updateStats();
+            const tierColors = {
+                exemplary: 'badge-green', proficient: 'badge-green',
+                developing: 'badge-yellow', unsatisfactory: 'badge-red',
+                critical_failure: 'badge-red'
+            };
+            addResult(`
+                <td style="font-weight:500;">${data.persona_id}</td>
+                <td><strong style="color:${score >= 7 ? 'var(--green)' : score >= 5 ? 'var(--yellow)' : 'var(--red)'}">${score}/10</strong></td>
+                <td><span class="badge ${tierColors[tier] || 'badge-blue'}">${tier.replace('_', ' ')}</span></td>
+                <td style="color:var(--text-dim);">${data.is_followup ? 'Follow-up' : 'Initial'}</td>
+            `);
+            break;
+
+        case 'persona_complete':
+            addEvent(`[${data.persona_id}] Complete — Avg: ${data.avg_score}/10`, 'info');
+            break;
+
+        case 'complete':
+            document.getElementById('run-status').textContent = 'Complete';
+            document.getElementById('run-status').style.color = 'var(--green)';
+            addEvent(`Run complete! Report generated.`, 'pass');
+            if (data.report_path) {
+                document.getElementById('report-link').style.display = 'block';
+                document.getElementById('report-href').href = '/reports/' + data.report_path;
+            }
+            evtSource.close();
+            break;
+
+        case 'error':
+            document.getElementById('run-status').textContent = 'Error';
+            document.getElementById('run-status').style.color = 'var(--red)';
+            addEvent(`ERROR: ${data.message}`, 'fail');
+            evtSource.close();
+            break;
+
+        case 'heartbeat':
+            break;
+    }
+};
+
+evtSource.onerror = function() {
+    // Check if run completed while we were disconnected
+    fetch(`/api/run/${runId}/status`).then(r => r.json()).then(data => {
+        if (data.status === 'complete' && data.report_path) {
+            document.getElementById('run-status').textContent = 'Complete';
+            document.getElementById('run-status').style.color = 'var(--green)';
+            document.getElementById('report-link').style.display = 'block';
+            document.getElementById('report-href').href = '/reports/' + data.report_path;
+        }
+    });
+    evtSource.close();
+};
+</script>
+{% endblock %}

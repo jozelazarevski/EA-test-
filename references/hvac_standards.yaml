@@ -1,0 +1,132 @@
+# ─────────────────────────────────────────────────────────────
+# HVAC Industry Standards & Codes — Public Reference Data
+#
+# Sources: ASHRAE Handbooks (publicly summarised), IMC, UMC,
+# EPA regulations, OSHA guidelines, AHRI certification data.
+# All values are from publicly available summaries and datasheets.
+# ─────────────────────────────────────────────────────────────
+
+ashrae_standards:
+  ashrae_15:
+    title: "ASHRAE 15 — Safety Standard for Refrigeration Systems"
+    scope: "Specifies safe design, construction, installation, and operation of refrigeration systems"
+    key_requirements:
+      - "Machinery rooms required when refrigerant charge exceeds per-occupant limits"
+      - "Refrigerant detectors required in machinery rooms"
+      - "Emergency ventilation must provide minimum 100 CFM per lb of refrigerant"
+      - "Self-closing doors required for machinery rooms"
+      - "No open flames or hot surfaces above auto-ignition temperature of refrigerant"
+      - "Pressure relief devices required on all pressure vessels"
+      - "Annual leak testing required for systems with > 50 lbs charge"
+    refrigerant_limits:
+      r134a:
+        occupancy_limit_ppm: 50000
+        atel_ppm: 50000
+        safety_group: "A1"
+      r410a:
+        occupancy_limit_ppm: 140000
+        atel_ppm: 140000
+        safety_group: "A1"
+      r513a:
+        occupancy_limit_ppm: 34000
+        atel_ppm: 34000
+        safety_group: "A1"
+      r1234ze:
+        occupancy_limit_ppm: 28000
+        safety_group: "A2L"
+
+  ashrae_90_1:
+    title: "ASHRAE 90.1 — Energy Standard for Buildings"
+    scope: "Minimum energy efficiency requirements for commercial buildings"
+    key_requirements:
+      - "Minimum chiller efficiency: 0.610 kW/ton (path A) for water-cooled centrifugal ≥300 tons"
+      - "Economizer required for cooling systems ≥54,000 Btu/h in most climate zones"
+      - "Variable speed drives required on fans >10 HP in VAV systems"
+      - "Chilled water reset required based on building load"
+      - "Condenser water temperature reset required for water-cooled systems"
+      - "Simultaneous heating and cooling limited (deadband ≥5°F)"
+    chiller_efficiency_minimums:
+      water_cooled_centrifugal_over_300ton:
+        full_load_kw_per_ton: 0.560
+        iplv_kw_per_ton: 0.500
+      water_cooled_screw_150_to_300ton:
+        full_load_kw_per_ton: 0.610
+        iplv_kw_per_ton: 0.550
+      air_cooled_screw_over_150ton:
+        full_load_kw_per_ton: 1.20
+        iplv_kw_per_ton: 1.05
+
+  ashrae_62_1:
+    title: "ASHRAE 62.1 — Ventilation for Acceptable Indoor Air Quality"
+    scope: "Minimum ventilation rates and other measures for acceptable IAQ"
+    key_requirements:
+      - "Office space: 5 CFM/person + 0.06 CFM/sq ft (ventilation rate procedure)"
+      - "Retail space: 7.5 CFM/person + 0.12 CFM/sq ft"
+      - "CO2 monitoring can be used for demand-controlled ventilation"
+      - "Outdoor air must be filtered to minimum MERV 8"
+      - "Economizer damper minimum position must meet outdoor air requirements"
+
+  ashrae_170:
+    title: "ASHRAE 170 — Ventilation of Health Care Facilities"
+    scope: "Ventilation requirements for hospitals and medical facilities"
+    key_requirements:
+      - "Operating rooms: minimum 20 ACH, 4 ACH outdoor air, positive pressure"
+      - "Isolation rooms: minimum 12 ACH, negative pressure, direct exhaust"
+      - "HEPA filtration required for protective environment rooms"
+      - "Temperature: 68–73°F for operating rooms"
+      - "Relative humidity: 20–60% for most areas, 30–60% for operating rooms"
+
+building_codes:
+  imc:
+    title: "International Mechanical Code (IMC)"
+    key_requirements:
+      - "Mechanical ventilation required when natural ventilation is insufficient"
+      - "Refrigerant piping must be accessible for inspection"
+      - "Equipment must be listed and labeled by approved agency"
+      - "Clearances for maintenance and operation must be maintained"
+  nfpa_90a:
+    title: "NFPA 90A — Installation of Air-Conditioning and Ventilating Systems"
+    key_requirements:
+      - "Duct materials must meet NFPA 90A flame spread and smoke development"
+      - "Fire/smoke dampers required at fire-rated assemblies"
+      - "Smoke detectors required in supply air ductwork >2000 CFM"
+
+epa_regulations:
+  section_608:
+    title: "EPA Section 608 — Refrigerant Management"
+    scope: "Governs handling, recovery, recycling, and reclaiming refrigerants"
+    key_requirements:
+      - "Technicians must be EPA Section 608 certified to handle refrigerants"
+      - "Refrigerant venting is prohibited under Clean Air Act"
+      - "Leak repair required within 30 days for commercial systems >50 lbs"
+      - "Annual leak rate threshold: 20% for commercial refrigeration, 10% for comfort cooling"
+      - "Records must be maintained for all refrigerant purchases and usage"
+      - "Recovery equipment must be certified by EPA-approved testing organization"
+    certification_types:
+      type_i: "Small appliances (< 5 lbs refrigerant)"
+      type_ii: "High-pressure appliances (most A/C and chillers)"
+      type_iii: "Low-pressure appliances (centrifugal chillers using R-123)"
+      universal: "All types"
+
+osha_guidelines:
+  lockout_tagout:
+    title: "OSHA 29 CFR 1910.147 — Control of Hazardous Energy (LOTO)"
+    requirements:
+      - "Written LOTO procedures required for each piece of equipment"
+      - "Authorized employees must apply personal locks and tags"
+      - "Energy isolation verification required before work begins"
+      - "Applies to electrical, pneumatic, hydraulic, mechanical energy"
+  confined_space:
+    title: "OSHA 29 CFR 1910.146 — Permit-Required Confined Spaces"
+    requirements:
+      - "Air handler plenums and large ductwork may be confined spaces"
+      - "Atmospheric testing required before entry"
+      - "Rescue plan required"
+      - "Continuous monitoring for O2, combustible gases, toxic substances"
+  electrical_safety:
+    title: "OSHA 29 CFR 1910 Subpart S and NFPA 70E"
+    requirements:
+      - "Arc flash PPE required for work on energized equipment"
+      - "Qualified persons only for work on >50V circuits"
+      - "VFDs store lethal DC bus voltage — must verify zero energy before work"
+      - "Capacitors in VFDs can retain charge for 5+ minutes after power off"

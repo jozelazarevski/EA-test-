@@ -35,7 +35,7 @@ from datetime import datetime
 from pathlib import Path
 
 from agent import HVACTestingAgent
-from config import REPORTS_DIR, HEADLESS, LLM_MODEL
+from config import REPORTS_DIR, HEADLESS, LLM_MODEL, SESSION_PERSIST
 from personas import PERSONAS, get_persona, get_personas_by_tier, list_all_personas
 from question_generator import generate_questions, generate_follow_up, generate_adversarial_inputs
 from llm_evaluator import evaluate_response, evaluate_conversation_coherence
@@ -52,11 +52,13 @@ class PersonaTestRunner:
         follow_ups_per_question: int = 1,
         headless: bool = False,
         model: str = None,
+        persist_session: bool = None,
     ):
         self.personas = personas
         self.questions_per_persona = questions_per_persona
         self.follow_ups_per_question = follow_ups_per_question
         self.headless = headless
+        self.persist_session = persist_session if persist_session is not None else SESSION_PERSIST
         self.model = model or LLM_MODEL
         self.run_id = datetime.now().strftime("%Y%m%d_%H%M%S")
         self.all_results = []
@@ -73,7 +75,7 @@ class PersonaTestRunner:
         print("=" * 70 + "\n")
 
         # Initialize the browser agent
-        agent = HVACTestingAgent(headless=self.headless)
+        agent = HVACTestingAgent(headless=self.headless, persist_session=self.persist_session)
         try:
             await agent.setup()
 
@@ -321,6 +323,8 @@ def main():
     parser.add_argument("--questions", type=int, default=3, help="Questions per persona (default: 3)")
     parser.add_argument("--follow-ups", type=int, default=1, help="Follow-ups per question (default: 1)")
     parser.add_argument("--model", default=None, help=f"Claude model (default: from .env or {LLM_MODEL})")
+    parser.add_argument("--no-session", action="store_true", help="Disable session persistence (always re-login)")
+    parser.add_argument("--clear-session", action="store_true", help="Clear saved session and re-login")
     parser.add_argument("--list", action="store_true", help="List all personas and exit")
 
     args = parser.parse_args()
@@ -328,6 +332,11 @@ def main():
     if args.list:
         list_all_personas()
         sys.exit(0)
+
+    if args.clear_session:
+        from session_manager import SessionManager
+        SessionManager().clear()
+        print("Saved session cleared.")
 
     # Determine which personas to run
     if args.personas:
@@ -341,12 +350,14 @@ def main():
         print("Error: No personas selected.")
         sys.exit(1)
 
+    persist = not args.no_session
     runner = PersonaTestRunner(
         personas=personas,
         questions_per_persona=args.questions,
         follow_ups_per_question=args.follow_ups,
         headless=args.headless,
         model=args.model,
+        persist_session=persist,
     )
 
     report_path = asyncio.run(runner.run())

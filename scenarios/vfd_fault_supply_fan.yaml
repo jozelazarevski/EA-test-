@@ -1,0 +1,34 @@
+id: SCEN-VFD-001
+title: VFD Fault on Supply Fan — Intermittent Overcurrent
+category: Variable Frequency Drives
+difficulty: hard
+equipment: ABB ACS580 VFD driving a 25HP supply fan motor
+
+symptoms:
+  - "VFD faulting on overcurrent (F0001) approximately every 2-3 hours"
+  - "Motor current spikes to 150% of rated amps briefly before fault"
+  - "VFD restarts fine after reset but faults again after a few hours"
+  - "Measured input voltage to VFD is stable at 478V"
+  - "Fan seems to run normally between faults — no unusual vibration or noise"
+  - "VFD heat sink temperature reads 62°C (rated for 50°C max ambient)"
+
+context: >
+  The VFD is located in a mechanical room with poor ventilation. Summer
+  temperatures in the room reach 110°F+. The fan serves a cleanroom
+  environment and downtime is causing pressure differential alarms.
+  The VFD was installed 2 years ago and has not had any issues until
+  this summer.
+
+root_cause: >
+  Combination of two issues: (1) VFD is thermally derated due to high
+  ambient temperature in the poorly ventilated mechanical room, reducing
+  its effective current capacity, and (2) one of the three output phases
+  has a marginal IGBT module that increases resistance when hot, causing
+  current imbalance and eventual overcurrent trip.
+
+tags:
+  - vfd
+  - overcurrent
+  - thermal
+  - motor
+  - intermittent

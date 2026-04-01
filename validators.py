@@ -2,8 +2,10 @@
 Validators for HVAC Testing Agent.
 
 Validates text responses and PDF documents against expected criteria.
+Includes technical fact validation using authoritative reference data.
 """
 
+import re
 from pathlib import Path
 
 try:
@@ -180,3 +182,221 @@ def validate_pdf(pdf_path: Path, expected_keywords: list) -> dict:
         })
 
     return result
+
+
+def validate_technical_facts(
+    response_text: str,
+    expected_answer: dict,
+) -> dict:
+    """
+    Validate a response against gold-standard expected answer reference data.
+
+    Checks for:
+    - Presence of required technical facts (from expected_facts / required_elements)
+    - Presence of required safety warnings
+    - Presence of forbidden content (automatic red flags)
+    - Technical value ranges (numeric claims vs authoritative values)
+
+    Args:
+        response_text: The EA response text.
+        expected_answer: Dict from references/expected_answers.yaml for this
+                         scenario or test case.
+
+    Returns:
+        Dict with fact_checks, safety_checks, forbidden_checks, value_checks,
+        and summary statistics.
+    """
+    lower = response_text.lower()
+    fact_checks = []
+    safety_checks = []
+    forbidden_checks = []
+    value_checks = []
+
+    # 1. Check required facts / elements
+    for section_key in ["required_elements", "expected_facts"]:
+        data = expected_answer.get(section_key)
+        if not data:
+            continue
+
+        items = []
+        if isinstance(data, dict):
+            for sub_key, sub_items in data.items():
+                for item in sub_items:
+                    items.append((sub_key, item))
+        elif isinstance(data, list):
+            items = [("facts", item) for item in data]
+
+        for category, fact in items:
+            # Extract key terms from the fact for matching
+            key_terms = _extract_key_terms(fact)
+            matched_terms = [t for t in key_terms if t in lower]
+            match_ratio = len(matched_terms) / len(key_terms) if key_terms else 0
+
+            fact_checks.append({
+                "category": category,
+                "expected_fact": fact,
+                "key_terms": key_terms,
+                "matched_terms": matched_terms,
+                "match_ratio": round(match_ratio, 2),
+                "present": match_ratio >= 0.5,  # At least half the key terms found
+            })
+
+    # 2. Check safety warnings
+    for safety_key in ["safety_warnings", "safety_notes"]:
+        warnings = expected_answer.get(safety_key, [])
+        for warning in warnings:
+            key_terms = _extract_key_terms(warning)
+            matched = [t for t in key_terms if t in lower]
+            match_ratio = len(matched) / len(key_terms) if key_terms else 0
+            safety_checks.append({
+                "expected_warning": warning,
+                "key_terms": key_terms,
+                "matched_terms": matched,
+                "match_ratio": round(match_ratio, 2),
+                "present": match_ratio >= 0.4,
+            })
+
+    # 3. Check forbidden content
+    for item in expected_answer.get("forbidden_content", []):
+        key_terms = _extract_key_terms(item)
+        found_terms = [t for t in key_terms if t in lower]
+        is_present = len(found_terms) / len(key_terms) >= 0.6 if key_terms else False
+        forbidden_checks.append({
+            "forbidden": item,
+            "detected": is_present,
+            "matched_terms": found_terms,
+        })
+
+    # 4. Check technical values
+    for values_key in ["technical_values", "expected_values"]:
+        values = expected_answer.get(values_key, {})
+        for key, expected_val in values.items():
+            if isinstance(expected_val, (int, float)):
+                found = _find_numeric_value_in_text(response_text, key, expected_val)
+                value_checks.append(found)
+            elif isinstance(expected_val, str) and "-" in str(expected_val):
+                # Range like "118-128"
+                found = _find_range_in_text(response_text, key, str(expected_val))
+                value_checks.append(found)
+
+    # Compute summary
+    facts_present = sum(1 for f in fact_checks if f["present"])
+    facts_total = len(fact_checks)
+    safety_present = sum(1 for s in safety_checks if s["present"])
+    safety_total = len(safety_checks)
+    forbidden_found = sum(1 for f in forbidden_checks if f["detected"])
+    values_matched = sum(1 for v in value_checks if v.get("match", False))
+    values_total = len(value_checks)
+
+    return {
+        "fact_checks": fact_checks,
+        "safety_checks": safety_checks,
+        "forbidden_checks": forbidden_checks,
+        "value_checks": value_checks,
+        "summary": {
+            "facts_coverage": f"{facts_present}/{facts_total}" if facts_total else "N/A",
+            "facts_coverage_pct": round(facts_present / facts_total * 100, 1) if facts_total else 0,
+            "safety_coverage": f"{safety_present}/{safety_total}" if safety_total else "N/A",
+            "safety_coverage_pct": round(safety_present / safety_total * 100, 1) if safety_total else 0,
+            "forbidden_violations": forbidden_found,
+            "values_accuracy": f"{values_matched}/{values_total}" if values_total else "N/A",
+        },
+    }
+
+
+def _extract_key_terms(text: str) -> list[str]:
+    """Extract meaningful technical terms from a reference fact string."""
+    # Remove common filler words and extract multi-word technical terms
+    stop_words = {
+        "the", "a", "an", "is", "are", "was", "were", "be", "been", "being",
+        "have", "has", "had", "do", "does", "did", "will", "would", "shall",
+        "should", "may", "might", "must", "can", "could", "of", "in", "to",
+        "for", "with", "on", "at", "from", "by", "about", "as", "into",
+        "through", "during", "before", "after", "above", "below", "between",
+        "and", "but", "or", "nor", "not", "if", "then", "than", "that",
+        "this", "these", "those", "it", "its", "they", "them", "their",
+        "we", "our", "you", "your", "he", "she", "his", "her",
+    }
+    words = re.findall(r"[a-z][a-z0-9/°\-]+", text.lower())
+    terms = [w for w in words if w not in stop_words and len(w) > 2]
+    return terms
+
+
+def _find_numeric_value_in_text(
+    text: str,
+    key: str,
+    expected: float,
+    tolerance_pct: float = 15.0,
+) -> dict:
+    """Check if a numeric value close to 'expected' appears in the text."""
+    # Find all numbers in the text
+    numbers = re.findall(r"[\d]+\.?\d*", text)
+    label = key.replace("_", " ").title()
+
+    for num_str in numbers:
+        try:
+            val = float(num_str)
+            if expected != 0:
+                diff_pct = abs(val - expected) / abs(expected) * 100
+            else:
+                diff_pct = abs(val)
+
+            if diff_pct <= tolerance_pct:
+                return {
+                    "label": label,
+                    "expected": expected,
+                    "found": val,
+                    "match": True,
+                    "detail": f"Found {val} (expected ~{expected}, within {tolerance_pct}%)",
+                }
+        except ValueError:
+            continue
+
+    return {
+        "label": label,
+        "expected": expected,
+        "found": None,
+        "match": False,
+        "detail": f"Value ~{expected} not found in response",
+    }
+
+
+def _find_range_in_text(text: str, key: str, expected_range: str) -> dict:
+    """Check if a value range like '118-128' appears in the text."""
+    label = key.replace("_", " ").title()
+
+    # Try to parse the expected range
+    parts = expected_range.split("-")
+    if len(parts) != 2:
+        return {"label": label, "expected": expected_range, "found": None, "match": False,
+                "detail": f"Could not parse range: {expected_range}"}
+
+    try:
+        lo, hi = float(parts[0].strip()), float(parts[1].strip())
+    except ValueError:
+        return {"label": label, "expected": expected_range, "found": None, "match": False,
+                "detail": f"Could not parse range: {expected_range}"}
+
+    # Check if the range or any value within it appears
+    numbers = re.findall(r"[\d]+\.?\d*", text)
+    for num_str in numbers:
+        try:
+            val = float(num_str)
+            if lo * 0.85 <= val <= hi * 1.15:
+                return {
+                    "label": label,
+                    "expected": expected_range,
+                    "found": val,
+                    "match": True,
+                    "detail": f"Found {val} (within range {expected_range})",
+                }
+        except ValueError:
+            continue
+
+    return {
+        "label": label,
+        "expected": expected_range,
+        "found": None,
+        "match": False,
+        "detail": f"No value in range {expected_range} found in response",
+    }

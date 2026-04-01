@@ -37,3 +37,8 @@ SCREENSHOT_ON_EACH_STEP = True
 # LLM settings
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
 LLM_MODEL = os.getenv("LLM_MODEL", "claude-sonnet-4-6")
+
+# Session persistence settings
+SESSION_PERSIST = os.getenv("SESSION_PERSIST", "true").lower() == "true"
+SESSION_DIR = Path(os.getenv("SESSION_DIR", str(BASE_DIR / ".session")))
+SESSION_MAX_AGE_HOURS = float(os.getenv("SESSION_MAX_AGE_HOURS", "12"))
