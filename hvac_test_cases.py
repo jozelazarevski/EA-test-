@@ -1,14 +1,20 @@
 """
 HVAC Test Cases for Expert Advisor Testing Agent.
 
-Each test case contains:
+Standalone test cases:
 - id: Unique identifier
 - category: HVAC domain category
 - question: The question to ask Expert Advisor
 - expect_pdf: Whether a PDF/document link is expected
 - pdf_keywords: Keywords expected inside referenced PDFs
 - test_type: Optional type hint for edge-case handling
-    ("off_topic", "competitor", "empty_input")
+
+Conversation chains:
+- id: Unique chain identifier
+- category: HVAC domain category
+- topic: Short description of the equipment/scenario under test
+- description: What the chain is testing
+- questions: Ordered list of questions sent consecutively (same session)
 """
 
 TEST_CASES = [
@@ -156,5 +162,79 @@ TEST_CASES = [
         "expect_pdf": False,
         "pdf_keywords": [],
         "test_type": "empty_input",
+    },
+]
+
+
+# ---------------------------------------------------------------------------
+# Conversation Chains — consecutive questions that must stay coherent
+# ---------------------------------------------------------------------------
+
+CONVERSATION_CHAINS = [
+    {
+        "id": "CHAIN-YK-001",
+        "category": "Chiller Systems",
+        "topic": "YORK YK Centrifugal Chiller",
+        "description": (
+            "Consecutive troubleshooting questions about a YORK YK chiller. "
+            "Verifies that Expert Advisor maintains context about the same "
+            "chiller model, refrigerant type (R-134a), and operating parameters "
+            "across the full conversation."
+        ),
+        "questions": [
+            "What refrigerant does the YORK YK centrifugal chiller use and what are its normal operating pressures?",
+            "The head pressure on this chiller is running about 15 PSI above normal. What should I check first?",
+            "I checked the condenser water and it looks fine. Could a problem with the VFD on the condenser water pump cause this?",
+            "What is the recommended purge unit maintenance schedule for this chiller?",
+        ],
+    },
+    {
+        "id": "CHAIN-YVAA-001",
+        "category": "Chiller Systems",
+        "topic": "YORK YVAA Air-Cooled Screw Chiller",
+        "description": (
+            "Progressive maintenance and diagnostics conversation about a "
+            "YORK YVAA chiller. Checks that EA keeps answers specific to the "
+            "YVAA model (air-cooled, screw compressor, R-410A) and does not "
+            "drift to other chiller types."
+        ),
+        "questions": [
+            "What are the key maintenance items for a YORK YVAA air-cooled screw chiller?",
+            "How often should the compressor oil be analyzed on this unit?",
+            "The chiller is showing a low suction pressure alarm. What are the most likely causes for this specific model?",
+            "Can I use R-410A recovery equipment that I also use for residential systems on this chiller?",
+        ],
+    },
+    {
+        "id": "CHAIN-METASYS-001",
+        "category": "Controls & BAS",
+        "topic": "Metasys BACnet Integration",
+        "description": (
+            "Multi-step troubleshooting of a BACnet MS/TP communication issue "
+            "on a Metasys system. Verifies that EA tracks the problem context "
+            "(NAE, trunk, device addressing) across turns without losing the thread."
+        ),
+        "questions": [
+            "I have a Metasys NAE that has lost communication with several field controllers on a BACnet MS/TP trunk. Where do I start troubleshooting?",
+            "I checked the wiring and it looks intact. The trunk has 24 devices. Could the trunk length be an issue?",
+            "What is the maximum recommended trunk length for BACnet MS/TP at 76800 baud on a Metasys system?",
+            "Some devices came back online but three are still offline. They are all on the far end of the trunk. What should I check next?",
+        ],
+    },
+    {
+        "id": "CHAIN-AHU-001",
+        "category": "Air Handling Units",
+        "topic": "AHU Freezestat Trip Diagnosis",
+        "description": (
+            "Step-by-step diagnosis of a freezestat trip on an air handling unit. "
+            "Tests that EA maintains the equipment context (mixed air section, "
+            "hot water coil, outdoor air damper) and builds on previous answers."
+        ),
+        "questions": [
+            "My air handling unit tripped on a freezestat alarm this morning. The outdoor temperature was 28°F. What are the common causes?",
+            "The hot water coil valve was stuck partially closed. Could this alone cause a freezestat trip?",
+            "I fixed the valve but want to prevent this from happening again. What control sequence changes should I make?",
+            "Should I also add a low-limit safety on the mixed air temperature? What setpoint would you recommend?",
+        ],
     },
 ]

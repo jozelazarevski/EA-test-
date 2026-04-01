@@ -30,7 +30,7 @@ import asyncio
 import sys
 
 from agent import HVACTestingAgent
-from hvac_test_cases import TEST_CASES
+from hvac_test_cases import TEST_CASES, CONVERSATION_CHAINS
 
 
 def list_test_cases():
@@ -153,6 +153,7 @@ Examples:
         print(f"  Tests to run: {len(test_ids)}")
     else:
         print(f"  Tests to run: {len(TEST_CASES)} (all)")
+    print(f"  Conversation chains: {len(CONVERSATION_CHAINS)}")
     print(f"  Mode: {'headless' if args.headless else 'visible browser'}")
     if args.model:
         print(f"  Model: {args.model}")
@@ -187,7 +188,7 @@ Examples:
     }
 
     print("\n" + "=" * 60)
-    print("  FINAL SUMMARY")
+    print("  FINAL SUMMARY — Standalone Tests")
     print("=" * 60)
     print(f"  Total:      {total}")
     print(f"  Avg Score:  {avg_score:.1f}/10")
@@ -201,11 +202,41 @@ Examples:
         if count > 0:
             icon = tier_icons.get(tier_name, "")
             print(f"    {icon} {tier_name.replace('_', ' ').title():20s} {count}")
+
+    # Chain summary
+    if agent.chain_results:
+        print()
+        print("=" * 60)
+        print("  CONVERSATION CHAINS")
+        print("=" * 60)
+        for cr in agent.chain_results:
+            coherence = cr.get("coherence", {})
+            c_score = coherence.get("overall_chain_score", 0)
+            c_tier = coherence.get("quality_tier", "unknown")
+            c_icon = tier_icons.get(c_tier, "?")
+            equip = coherence.get("equipment_consistency", {})
+            drifted = equip.get("drifted", False)
+            drift_flag = " [DRIFTED]" if drifted else ""
+            print(f"  {cr['chain_id']:20s} {cr['topic']}")
+            print(f"    Turns: {len(cr['turns'])}  Avg turn score: {cr['avg_turn_score']}/10")
+            print(f"    Coherence: {c_score}/10 {c_icon} {c_tier.replace('_', ' ').title()}{drift_flag}")
+            ctx = coherence.get("context_retention", {})
+            if ctx.get("lost_items"):
+                print(f"    Context lost: {', '.join(ctx['lost_items'][:3])}")
+            issues = coherence.get("issues", [])
+            if issues:
+                for issue in issues[:2]:
+                    print(f"    Issue: {issue}")
+
     print(f"\n  Report: {report_path}")
     print("=" * 60 + "\n")
 
     # Exit with non-zero if average score is below threshold
-    sys.exit(0 if avg_score >= 6.0 else 1)
+    chain_ok = all(
+        cr.get("coherence", {}).get("overall_chain_score", 0) >= 6
+        for cr in agent.chain_results
+    ) if agent.chain_results else True
+    sys.exit(0 if avg_score >= 6.0 and chain_ok else 1)
 
 
 if __name__ == "__main__":

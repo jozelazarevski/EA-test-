@@ -30,9 +30,9 @@ from config import (
     SESSION_MAX_AGE_HOURS,
     LLM_MODEL,
 )
-from hvac_test_cases import TEST_CASES
+from hvac_test_cases import TEST_CASES, CONVERSATION_CHAINS
 from validators import validate_pdf
-from llm_evaluator import evaluate_response
+from llm_evaluator import evaluate_response, evaluate_chain_coherence
 from report_generator import ReportGenerator
 from session_manager import SessionManager
 
@@ -90,6 +90,7 @@ class HVACTestingAgent:
         self.context = None
         self.page = None
         self.results = []
+        self.chain_results = []
         self.run_id = datetime.now().strftime("%Y%m%d_%H%M%S")
         self.screenshots_dir = REPORTS_DIR / f"screenshots_{self.run_id}"
         self.screenshots_dir.mkdir(parents=True, exist_ok=True)
@@ -625,8 +626,96 @@ class HVACTestingAgent:
 
         return result
 
+    async def run_conversation_chain(self, chain: dict) -> dict:
+        """Run a conversation chain — consecutive questions evaluated for coherence.
+
+        Sends each question in order (same browser session/conversation),
+        evaluates each response individually, then evaluates the full chain
+        for equipment/reference consistency and context retention.
+        """
+        chain_id = chain["id"]
+        topic = chain["topic"]
+        questions = chain["questions"]
+
+        print(f"\n{'='*60}")
+        print(f"[Chain {chain_id}] Topic: {topic}")
+        print(f"[Chain {chain_id}] Questions: {len(questions)}")
+        print(f"{'='*60}")
+
+        turns = []
+        per_turn_evaluations = []
+        conversation_history = []
+
+        for i, question in enumerate(questions):
+            print(f"\n[Chain {chain_id}] Turn {i+1}/{len(questions)}: {question[:80]}...")
+
+            response = await self.send_question(question)
+
+            turn = {
+                "question": question,
+                "response": response["response_text"],
+                "response_time": response["response_time"],
+                "pdf_links": response["pdf_links"],
+                "error": response.get("error"),
+            }
+            turns.append(turn)
+
+            # Evaluate this turn with conversation history for context
+            evaluation = evaluate_response(
+                persona=DEFAULT_PERSONA,
+                question=question,
+                response_text=response["response_text"],
+                conversation_history=conversation_history if conversation_history else None,
+                model=self.model,
+            )
+            per_turn_evaluations.append(evaluation)
+
+            score = evaluation.get("overall_score", 0)
+            tier = evaluation.get("quality_tier", "unknown")
+            print(f"[Chain {chain_id}] Turn {i+1} score: {score}/10 ({tier})")
+
+            conversation_history.append({
+                "question": question,
+                "response": response["response_text"],
+            })
+
+            # Small delay between turns
+            if i < len(questions) - 1:
+                await asyncio.sleep(2)
+
+        # Evaluate chain coherence — equipment consistency, context retention
+        print(f"\n[Chain {chain_id}] Evaluating chain coherence...")
+        coherence = evaluate_chain_coherence(
+            chain=chain,
+            turns=turns,
+            per_turn_evaluations=per_turn_evaluations,
+            model=self.model,
+        )
+
+        chain_score = coherence.get("overall_chain_score", 0)
+        chain_tier = coherence.get("quality_tier", "unknown")
+        print(f"[Chain {chain_id}] Coherence score: {chain_score}/10 ({chain_tier})")
+
+        # Compute per-turn average
+        turn_scores = [e.get("overall_score", 0) for e in per_turn_evaluations]
+        avg_turn_score = sum(turn_scores) / len(turn_scores) if turn_scores else 0
+
+        result = {
+            "chain_id": chain_id,
+            "category": chain["category"],
+            "topic": chain["topic"],
+            "description": chain["description"],
+            "turns": turns,
+            "per_turn_evaluations": per_turn_evaluations,
+            "coherence": coherence,
+            "avg_turn_score": round(avg_turn_score, 1),
+            "chain_score": chain_score,
+        }
+
+        return result
+
     async def run_all_tests(self) -> list:
-        """Run all test cases sequentially."""
+        """Run all standalone test cases sequentially."""
         cases = TEST_CASES
         if self.test_ids:
             cases = [tc for tc in TEST_CASES if tc["id"] in self.test_ids]
@@ -645,10 +734,30 @@ class HVACTestingAgent:
 
         return self.results
 
+    async def run_all_chains(self) -> list:
+        """Run all conversation chains sequentially."""
+        chains = CONVERSATION_CHAINS
+        if self.test_ids:
+            chains = [c for c in CONVERSATION_CHAINS if c["id"] in self.test_ids]
+
+        if not chains:
+            return []
+
+        print(f"\n[Agent] Running {len(chains)} conversation chain(s)...")
+        for i, chain in enumerate(chains):
+            print(f"\n[Agent] Chain progress: {i+1}/{len(chains)}")
+            result = await self.run_conversation_chain(chain)
+            self.chain_results.append(result)
+
+            if i < len(chains) - 1:
+                await asyncio.sleep(3)
+
+        return self.chain_results
+
     async def generate_report(self) -> Path:
         """Generate the test report."""
         report_gen = ReportGenerator(self.run_id)
-        report_path = report_gen.generate(self.results)
+        report_path = report_gen.generate(self.results, self.chain_results)
         print(f"\n[Agent] Report generated: {report_path}")
         return report_path
 
@@ -669,10 +778,11 @@ class HVACTestingAgent:
         print("[Agent] Browser closed.")
 
     async def run(self) -> Path:
-        """Full test execution pipeline."""
+        """Full test execution pipeline: standalone tests + conversation chains."""
         try:
             await self.setup()
             await self.run_all_tests()
+            await self.run_all_chains()
             report_path = await self.generate_report()
             return report_path
         finally:

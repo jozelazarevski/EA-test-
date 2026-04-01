@@ -40,7 +40,7 @@ from config import (
     SESSION_PERSIST,
     TARGET_URL,
 )
-from hvac_test_cases import TEST_CASES
+from hvac_test_cases import TEST_CASES, CONVERSATION_CHAINS
 from personas import PERSONAS
 
 logger = logging.getLogger(__name__)
@@ -594,11 +594,26 @@ def _run_static_tests(run_id: str, test_ids: list, headless: bool, model: str = 
                 "total": len(test_ids),
             })
 
+        # Run conversation chains
+        _emit(run_id, {"type": "status", "status": "running", "message": "Running conversation chains..."})
+        loop.run_until_complete(agent.run_all_chains())
+
+        for cr in agent.chain_results:
+            coherence = cr.get("coherence", {})
+            _emit(run_id, {
+                "type": "chain_result",
+                "chain_id": cr["chain_id"],
+                "topic": cr["topic"],
+                "chain_score": coherence.get("overall_chain_score", 0),
+                "tier": coherence.get("quality_tier", "unknown"),
+                "avg_turn_score": cr["avg_turn_score"],
+            })
+
         # Generate report
         _emit(run_id, {"type": "status", "status": "generating_report", "message": "Generating report..."})
         from report_generator import ReportGenerator
         gen = ReportGenerator(run_id)
-        report_path = gen.generate(agent.results)
+        report_path = gen.generate(agent.results, agent.chain_results)
 
         run["status"] = "complete"
         run["report_path"] = str(report_path.name)
@@ -610,6 +625,7 @@ def _run_static_tests(run_id: str, test_ids: list, headless: bool, model: str = 
             "type": "complete",
             "report_path": str(report_path.name),
             "total_tests": len(test_ids),
+            "total_chains": len(agent.chain_results),
             "avg_score": round(avg_score, 1),
             "passed": sum(1 for s in scores if s >= 6),
         })

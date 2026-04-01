@@ -44,21 +44,23 @@ class ReportGenerator:
         self.report_dir = REPORTS_DIR
         self.report_dir.mkdir(parents=True, exist_ok=True)
 
-    def generate(self, results: list) -> Path:
+    def generate(self, results: list, chain_results: list = None) -> Path:
         """Generate both HTML and JSON reports. Returns path to HTML report."""
-        json_path = self._generate_json(results)
-        html_path = self._generate_html(results)
+        chain_results = chain_results or []
+        json_path = self._generate_json(results, chain_results)
+        html_path = self._generate_html(results, chain_results)
         print(f"[Report] JSON report: {json_path}")
         print(f"[Report] HTML report: {html_path}")
         return html_path
 
-    def _generate_json(self, results: list) -> Path:
+    def _generate_json(self, results: list, chain_results: list = None) -> Path:
         """Generate a JSON report."""
         report = {
             "run_id": self.run_id,
             "timestamp": datetime.now().isoformat(),
             "summary": self._build_summary(results),
             "results": results,
+            "conversation_chains": chain_results or [],
         }
         path = self.report_dir / f"report_{self.run_id}.json"
         with open(path, "w") as f:
@@ -126,8 +128,9 @@ class ReportGenerator:
             "errors": errors,
         }
 
-    def _generate_html(self, results: list) -> Path:
+    def _generate_html(self, results: list, chain_results: list = None) -> Path:
         """Generate an HTML report with LLM evaluation details."""
+        chain_results = chain_results or []
         summary = self._build_summary(results)
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
@@ -150,6 +153,20 @@ class ReportGenerator:
         test_cards = ""
         for r in results:
             test_cards += self._build_test_card(r)
+
+        # Build conversation chain cards
+        chain_section_html = ""
+        if chain_results:
+            chain_cards = ""
+            for cr in chain_results:
+                chain_cards += self._build_chain_card(cr)
+            chain_section_html = f"""
+        <h2>Conversation Chains</h2>
+        <p style="font-size:13px;color:#718096;margin-bottom:15px;">
+            Consecutive questions testing context retention and equipment/reference consistency.
+            Click a chain to expand.
+        </p>
+        {chain_cards}"""
 
         # Red flags section
         red_flags_html = ""
@@ -369,6 +386,55 @@ class ReportGenerator:
         .red-flags ul {{ margin-left: 20px; }}
         .red-flags li {{ margin-bottom: 6px; color: #742a2a; font-size: 13px; }}
 
+        .chain-card {{
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+            border-left: 4px solid #3182ce;
+            overflow: hidden;
+        }}
+        .chain-card .test-card-header {{ border-left: none; }}
+        .chain-card .test-card-body {{ display: none; }}
+        .chain-card.open .test-card-body {{ display: block; }}
+
+        .coherence-grid {{
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            gap: 12px;
+            margin: 15px 0;
+        }}
+        .coherence-item {{
+            background: #f7fafc;
+            border-radius: 6px;
+            padding: 12px;
+        }}
+        .coherence-item .coh-name {{ font-weight: 600; font-size: 13px; }}
+        .coherence-item .coh-score {{ font-size: 20px; font-weight: 700; margin: 4px 0; }}
+        .coherence-item .coh-detail {{ font-size: 12px; color: #4a5568; }}
+
+        .chain-turn {{
+            border-left: 3px solid #e2e8f0;
+            padding: 10px 15px;
+            margin: 10px 0;
+        }}
+        .chain-turn .turn-q {{ font-weight: 600; font-size: 13px; color: #2d3748; }}
+        .chain-turn .turn-r {{
+            font-size: 12px; color: #555; margin-top: 6px;
+            max-height: 120px; overflow-y: auto; white-space: pre-wrap;
+        }}
+        .chain-turn .turn-score {{ font-size: 12px; margin-top: 4px; }}
+
+        .drift-warning {{
+            background: #fff5f5;
+            border: 1px solid #fc8181;
+            border-radius: 6px;
+            padding: 10px 15px;
+            font-size: 13px;
+            color: #742a2a;
+            margin: 10px 0;
+        }}
+
         .error {{ color: #e53e3e; font-size: 12px; }}
         .footer {{
             text-align: center;
@@ -434,7 +500,9 @@ class ReportGenerator:
             </tbody>
         </table>
 
-        <h2>Detailed Test Results</h2>
+        {chain_section_html}
+
+        <h2>Standalone Test Results</h2>
         <p style="font-size:13px;color:#718096;margin-bottom:15px;">Click a test to expand evaluation details.</p>
         {test_cards}
 
@@ -599,6 +667,100 @@ class ReportGenerator:
                 {error_html}
                 <p style="font-size:12px;color:#718096;margin-top:10px;">Response time: {r['response_time']}s</p>
                 <div class="response-preview">{response_preview}</div>
+            </div>
+        </div>"""
+
+    def _build_chain_card(self, cr: dict) -> str:
+        """Build an expandable card for a conversation chain result."""
+        coherence = cr.get("coherence", {})
+        chain_score = coherence.get("overall_chain_score", 0)
+        tier = coherence.get("quality_tier", "unknown")
+        color, bg = TIER_COLORS.get(tier, ("#718096", "#edf2f7"))
+        icon = TIER_ICONS.get(tier, "?")
+        label = tier.replace("_", " ").title()
+
+        # Coherence dimensions
+        coh_dims = {
+            "equipment_consistency": "Equipment Consistency",
+            "refrigerant_consistency": "Refrigerant Consistency",
+            "parameter_consistency": "Parameter Consistency",
+            "context_retention": "Context Retention",
+            "progressive_depth": "Progressive Depth",
+        }
+        coh_grid = ""
+        for dim_key, dim_label in coh_dims.items():
+            dim_data = coherence.get(dim_key, {})
+            dim_score = dim_data.get("score", 0)
+            reasoning = dim_data.get("reasoning", "")
+            sc = self._score_color(dim_score)
+            coh_grid += f"""
+            <div class="coherence-item">
+                <div class="coh-name">{dim_label}</div>
+                <div class="coh-score" style="color:{sc};">{dim_score}/10</div>
+                <div class="coh-detail">{reasoning}</div>
+            </div>"""
+
+        # Drift warning
+        equip = coherence.get("equipment_consistency", {})
+        drift_html = ""
+        if equip.get("drifted"):
+            models = ", ".join(equip.get("models_referenced", []))
+            drift_html = f"""
+            <div class="drift-warning">
+                <strong>Equipment Drift Detected:</strong> EA switched equipment models during the conversation.
+                Models referenced: {models}
+            </div>"""
+
+        # Turns
+        turns_html = ""
+        turns = cr.get("turns", [])
+        evals = cr.get("per_turn_evaluations", [])
+        for i, turn in enumerate(turns):
+            ev = evals[i] if i < len(evals) else {}
+            t_score = ev.get("overall_score", 0)
+            t_tier = ev.get("quality_tier", "unknown")
+            t_color, _ = TIER_COLORS.get(t_tier, ("#718096", "#edf2f7"))
+            response_preview = (turn.get("response", "") or "")[:300]
+            turns_html += f"""
+            <div class="chain-turn">
+                <div class="turn-q">Turn {i+1}: {turn['question']}</div>
+                <div class="turn-score" style="color:{t_color};">Score: {t_score}/10 ({t_tier.replace('_', ' ').title()})</div>
+                <div class="turn-r">{response_preview}</div>
+            </div>"""
+
+        # Issues
+        issues = coherence.get("issues", [])
+        issues_html = ""
+        if issues:
+            items = "".join(f"<li>{iss}</li>" for iss in issues)
+            issues_html = f'<div style="margin:10px 0;"><strong>Issues:</strong><ul style="margin-left:18px;font-size:12px;color:#742a2a;">{items}</ul></div>'
+
+        # Summary
+        summary = coherence.get("summary", "")
+
+        return f"""
+        <div class="chain-card">
+            <div class="test-card-header" onclick="this.closest('.chain-card').classList.toggle('open')">
+                <div class="left">
+                    <span class="test-id">{cr['chain_id']}</span>
+                    <span class="category">{cr['category']}</span>
+                    <span class="question-preview">{cr['topic']} ({len(turns)} turns)</span>
+                </div>
+                <div style="display:flex;align-items:center;">
+                    <span style="font-size:12px;color:#718096;margin-right:15px;">Avg turn: {cr['avg_turn_score']}/10</span>
+                    <span class="score-display" style="color:{color};">{chain_score}/10</span>
+                    <span class="tier-badge" style="background:{bg};color:{color};">{icon} {label}</span>
+                </div>
+            </div>
+            <div class="test-card-body">
+                <p style="font-size:13px;color:#4a5568;margin:15px 0;">{cr.get('description', '')}</p>
+                {drift_html}
+                <h3 style="font-size:14px;margin:15px 0 5px;">Coherence Scores</h3>
+                <div class="coherence-grid">{coh_grid}</div>
+                <div class="verdict" style="border-color:{color};background:{bg};">{summary}</div>
+                {issues_html}
+                <h3 style="font-size:14px;margin:15px 0 5px;">Conversation Turns</h3>
+                {turns_html}
             </div>
         </div>"""
 
